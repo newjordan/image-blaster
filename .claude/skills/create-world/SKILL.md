@@ -21,7 +21,13 @@ Derive a lowercase hyphenated slug from `$ARGUMENTS` (e.g. "snowy mountain cabin
 mkdir -p worlds/<slug>/source worlds/<slug>/world worlds/<slug>/output worlds/<slug>/scene
 ```
 
-### 3. Identify source image
+### 3. Check for resumable or existing world
+
+**Resume in-progress generation:** If `worlds/<slug>/world/operation.json` exists and contains `"done": false`, skip to step 5 (Poll until complete) using the `operation_id` from that file. Do not POST a new request.
+
+**Regenerate existing world:** If `worlds/<slug>/world/world.json` already exists (generation previously completed), confirm with the user before proceeding. If they confirm, continue from step 4 — the `source/` directory is left intact and `world.json` / `operation.json` will be overwritten.
+
+### 4. Identify source image
 
 Check `input/` first for any image file (`.jpg`, `.jpeg`, `.png`, `.webp`). If found, use image prompt mode and move the file to `worlds/<slug>/source/` after the world is created.
 
@@ -29,7 +35,7 @@ If nothing in `input/`, check `worlds/<slug>/source/` for an existing image.
 
 If no image found anywhere, use text prompt mode.
 
-### 4. Create the world
+### 5. Create the world
 
 **Endpoint:** `POST https://api.worldlabs.ai/marble/v1/worlds:generate`
 
@@ -62,7 +68,7 @@ If no image found anywhere, use text prompt mode.
 
 Save the full response to `worlds/<slug>/world/operation.json`. The response contains an `operation_id` field.
 
-### 5. Poll until complete
+### 6. Poll until complete
 
 **Endpoint:** `GET https://api.worldlabs.ai/marble/v1/operations/<operation_id>`
 
@@ -76,15 +82,15 @@ Poll every **15 seconds**. Generation typically takes ~5 minutes.
 
 Update `worlds/<slug>/world/operation.json` each poll.
 
-### 6. Write world.json
+### 7. Write world.json
 
 When complete, write `response` from the operation to `worlds/<slug>/world/world.json`.
 
-### 7. Move staged files
+### 8. Move staged files
 
 If a source image came from `input/`, move it: `mv input/<filename> worlds/<slug>/source/`
 
-### 8. Report result
+### 9. Report result
 
 Tell the user:
 - Slug and display name

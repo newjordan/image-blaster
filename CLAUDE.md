@@ -50,7 +50,7 @@ worlds/
 
 ### Claude Skills (`.claude/skills/`)
 
-Skills are Claude Code skills per https://code.claude.com/docs/en/skills. Each skill lives at `.claude/skills/<skill-name>/SKILL.md` and is invokable as `/<skill-name>`. Shared world structure context is in `.claude/rules/world-context.md` (auto-loaded every session).
+Skills are Claude Code skills per https://code.claude.com/docs/en/skills. Each skill lives at `.claude/skills/<skill-name>/SKILL.md` and is invokable as `/<skill-name>`. Shared world structure context is in `.claude/rules/project.md` (auto-loaded every session).
 
 **`/create-world [description]`** — Checks `input/` for source images, then calls the World Labs API (https://docs.worldlabs.ai/), polls until complete, and writes artifacts to `worlds/<name>/world/world.json`. Runs in a forked subagent so the 5-minute poll doesn't block conversation.
 
