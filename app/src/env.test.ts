@@ -10,8 +10,8 @@ describe('env vars', () => {
     expect(process.env.WORLD_LABS_API_KEY!.length).toBeGreaterThan(0)
   })
 
-  it('GEMINI_API_KEY is set', () => {
-    expect(typeof process.env.GEMINI_API_KEY).toBe('string')
-    expect(process.env.GEMINI_API_KEY!.length).toBeGreaterThan(0)
+  it('FAL_KEY is set', () => {
+    expect(typeof process.env.FAL_KEY).toBe('string')
+    expect(process.env.FAL_KEY!.length).toBeGreaterThan(0)
   })
 })

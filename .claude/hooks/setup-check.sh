@@ -5,10 +5,10 @@ cd "$CLAUDE_PROJECT_DIR" 2>/dev/null || cd "$(dirname "$0")/../.."
 
 # --- .env checks ---
 if [ ! -f .env ]; then
-  echo "⚠️  .env missing — copy .env.example to .env and fill in both keys."
+  echo "⚠️  .env missing — copy .env.example to .env and fill in required keys."
 else
   grep -q "^WORLD_LABS_API_KEY=." .env || echo "⚠️  WORLD_LABS_API_KEY not set in .env"
-  grep -q "^GEMINI_API_KEY=." .env    || echo "⚠️  GEMINI_API_KEY not set in .env"
+  grep -q "^FAL_KEY=." .env           || echo "⚠️  FAL_KEY not set in .env"
 fi
 
 # --- worlds/ status ---

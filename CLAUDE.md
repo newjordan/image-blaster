@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Compendium is a collection of Claude skills for generating and viewing 3D worlds using the World Labs API and Three.js. It has two main components:
 
-1. **Claude Skills** (`.claude/skills/`) — invokable via `/skill-name`, use the World Labs and Gemini APIs to generate and process worlds
+1. **Claude Skills** (`.claude/skills/`) — invokable via `/skill-name`, use World Labs and FAL APIs plus agent image understanding to generate and process worlds
 2. **React Viewer** (`app/`) — TypeScript + SparkJS + React Three Fibre app that loads and displays generated worlds
 
 The two components share a **working directory** (`worlds/`) that is not tracked by git. The `input/` folder at the project root is a staging area for user-supplied files (also gitignored).
@@ -17,7 +17,7 @@ Copy `.env.example` to `.env` and fill in the keys:
 
 ```
 WORLD_LABS_API_KEY=   # Required for /create-world
-GEMINI_API_KEY=       # Required for /video-understanding
+FAL_KEY=              # Required for /3d-blast
 ```
 
 ## Commands
@@ -43,6 +43,8 @@ worlds/
     source/   # user-supplied input files (images, prompts, etc.)
     world/    # create-world skill output (splat, colliders, panorama)
     output/   # output from other skills (audio, edited images, etc.)
+      image-uncover/ # rich image analysis JSON
+      assets/ # asset manifest and generated asset images/meshes
     scene/    # project.json — Three.js editor scene file for arbitrary objects
 ```
 
@@ -56,9 +58,13 @@ Skills are Claude Code skills per https://code.claude.com/docs/en/skills. Each s
 
 **`/threejs-edit [world-name] [instructions]`** — Reads and writes `worlds/<name>/scene/project.json` to add or modify Three.js objects in a world's scene.
 
-**`input/` staging** — Drop images or other assets into `input/` (gitignored), then ask Claude what to do with them. Claude will check this folder automatically when creating worlds or processing assets.
+**`/image-uncover [world-name]`** — Scans images in `input/` and `worlds/<name>/source/`, uses agent image understanding to write rich scene analysis to `worlds/<name>/output/image-uncover/image-uncover.json`, and saves or updates the approved asset manifest at `worlds/<name>/output/assets/assets.json`.
 
-**`video-understanding`** — Uses Gemini API. TBD.
+**`/3d-blast [world-name]`** — Reads `worlds/<name>/output/assets/assets.json` and generates or regenerates assets under `worlds/<name>/output/assets/<asset-id>/` using FAL-backed helper scripts for Nano Banana image isolation and Hunyuan 3D PBR mesh generation. It can also create a single asset directly from a supplied image path and description.
+
+Asset API calls are implementation scripts under `.claude/scripts/asset-pipeline/`, not standalone slash-command skills. The workflow skills document when and how Claude should call those scripts.
+
+**`input/` staging** — Drop images or other assets into `input/` (gitignored), then ask Claude what to do with them. Claude will check this folder automatically when creating worlds or processing assets.
 
 **`image-editing`** — TBD.
 
@@ -94,6 +100,7 @@ Three areas to cover:
 ## Key External APIs
 
 - World Labs API docs: https://docs.worldlabs.ai/
+- FAL model APIs: https://fal.ai/models
 - SparkJS docs: https://sparkjs.dev/
 - React Three Fibre docs: https://r3f.docs.pmnd.rs/
 - Leva: https://github.com/pmndrs/leva
