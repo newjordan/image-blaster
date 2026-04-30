@@ -40,14 +40,14 @@ All skills and the React app read/write from `worlds/` (gitignored):
 ```
 worlds/
   <world-name>/
-    project.json # project envelope and current state
-    image.json   # rich image analysis from /image-blast-uncover
-    objects.json # approved object queue for /image-blast-3d
+    project.json # minimal durable project metadata
+    image.json   # merged literal scene/world analysis
     source/      # user-supplied input files (images, prompts, etc.)
+      <image>.json # per-image literal analysis beside the source image
     output/
       world/     # /image-blast-world output (world.json, operation.json)
       sfx/       # world-level ambience and arbitrary SFX
-      <object>/  # generated object images, meshes, and object.json
+      <object>/  # object source of truth: object.json plus generated files
         sfx/     # object-specific impact or interaction sounds
     scene/       # project.json — Three.js editor scene file for arbitrary objects
 ```
@@ -58,21 +58,21 @@ worlds/
 
 Skills are Claude Code skills per https://code.claude.com/docs/en/skills. Each skill lives at `.claude/skills/<skill-name>/SKILL.md` and is invokable as `/<skill-name>`. Shared world structure context is in `.claude/rules/project.md` (auto-loaded every session).
 
-**`/image-blast-project [world-name or description]`** — Creates or inspects the canonical `worlds/<name>/` project envelope, writes `project.json`, reports state, and recommends next actions.
+**`/image-blast-project [world-name or description]`** — Creates or inspects the canonical `worlds/<name>/` project envelope, writes minimal `project.json`, stages input images into `source/`, derives current state from the filesystem, and recommends next actions.
 
 **`/image-blast-world [world-name] [description]`** — Ensures the project envelope exists, then calls the World Labs API (https://docs.worldlabs.ai/), polls until complete, and writes artifacts to `worlds/<name>/output/world/world.json`. Runs in a forked subagent so the 5-minute poll doesn't block conversation.
 
 **`/threejs-edit [world-name] [instructions]`** — Reads and writes `worlds/<name>/scene/project.json` to add or modify Three.js objects in a world's scene.
 
-**`/image-blast-uncover [world-name]`** — Scans images in `input/` and `worlds/<name>/source/`, uses agent image understanding to write rich scene analysis to `worlds/<name>/image.json`, and saves or updates the approved object manifest at `worlds/<name>/objects.json`.
+**`/image-blast-uncover [world-name]`** — Scans staged images in `worlds/<name>/source/`, writes one flat literal analysis beside each source image as `source/<image-name>.json`, merges those records into root `worlds/<name>/image.json`, and creates or updates per-object files at `worlds/<name>/output/<object-id>/object.json`.
 
-**`/image-blast-3d [world-name]`** — Reads `worlds/<name>/objects.json` and generates or regenerates objects under `worlds/<name>/output/<object-id>/` using FAL-backed helper scripts for image isolation and Hunyuan 3D PBR mesh generation. It can also create a single object directly from a supplied image path and description.
+**`/image-blast-3d [world-name]`** — Scans `worlds/<name>/output/<object-id>/object.json` files and generates or regenerates objects in those folders using FAL-backed helper scripts for image isolation and Hunyuan 3D PBR mesh generation. It can also create a single object directly from a supplied image path and description.
 
-**`/image-blast-sfx [world-name]`** — Generates world ambience loops, object impact sounds, or arbitrary sound effects using the FAL ElevenLabs SFX endpoint. World and arbitrary SFX are saved under `worlds/<name>/output/sfx/`; object sounds are saved under `worlds/<name>/output/<object-id>/sfx/`.
+**`/image-blast-sfx [world-name]`** — Generates world ambience loops, object impact sounds, or arbitrary sound effects using the FAL ElevenLabs SFX endpoint. World and arbitrary SFX prefer `ambient_sound` from `image.json` and are saved under `worlds/<name>/output/sfx/`; object sounds use `object.json` and are saved under `worlds/<name>/output/<object-id>/sfx/`.
 
 FAL API calls are implementation scripts under `.claude/scripts/asset-pipeline/` and `.claude/scripts/sfx/`, not standalone slash-command skills. The workflow skills document when and how Claude should call those scripts.
 
-**`input/` staging** — Drop images or other assets into `input/` (gitignored), then ask Claude what to do with them. Claude will check this folder automatically when creating worlds or processing assets.
+**`input/` staging** — Drop images or other assets into `input/` (gitignored), then ask Claude what to do with them. `/image-blast-project` stages images into `worlds/<name>/source/` once the project name is confirmed.
 
 ### React Viewer (`app/`)
 

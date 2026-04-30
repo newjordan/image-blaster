@@ -1,59 +1,83 @@
 ---
 name: image-blast-uncover
-description: Deeply analyze source images into structured scene and object descriptions. Use when the user wants rich image understanding, scene captions, atmosphere, object lists, or an objects.json queue for later 3D generation.
+description: Deeply analyze source images into literal scene and object descriptions. Use when the user wants image understanding, scene captions, atmosphere, source image JSON files, object directories, or 3D object candidates.
 argument-hint: [world-name] [optional image paths or instructions]
-allowed-tools: Read Write Glob Bash(node *)
+allowed-tools: Read Write Glob Bash(node .claude/scripts/project/project-state.mjs *)
 ---
 
-Uncover rich image information for project `$0`. Additional image paths or instructions may appear in `$ARGUMENTS`.
+Uncover literal image information for project `$0`. Additional image paths or instructions may appear in `$ARGUMENTS`.
 
 ## Instructions
 
 1. Require a project/world slug in `$0`. If it is missing, ask which `worlds/<world-name>/` directory to use.
-2. Ensure the project envelope exists and read current state:
+2. Ensure the project envelope exists, stage any input images when appropriate, and read derived state:
 
 ```bash
-node .claude/scripts/project/project-state.mjs --world "$0"
+node .claude/scripts/project/project-state.mjs --world "$0" --stage-input
 ```
 
 3. Read `IMAGE-BLAST.md` in this skill directory and follow its JSON contract exactly.
-4. Check existing root outputs before analyzing:
-   - `worlds/$0/image.json`
-   - `worlds/$0/objects.json`
-5. If existing output exists, treat this as review/update work:
-   - preserve stable image slugs and object IDs where possible
-   - preserve completed generated object records unless the user asks to regenerate, remove, or replace them
-   - propose additions, removals, field edits, or regeneration flags rather than starting from scratch
-6. Gather candidate image paths from explicit paths in `$ARGUMENTS`, `input/`, and `worlds/$0/source/`. Prefer stable paths in `worlds/$0/source/`; use `/image-blast-project` to stage originals into `source/` when needed.
-7. Read each image directly and inspect it using agent image understanding. For each image, produce the `IMAGE-BLAST.md` per-image JSON, including:
-   - `slug`
-   - `scene_name`
-   - `short_caption`
-   - `long_description`
-   - `environment`
-   - `visual_style`
-   - `lighting`
-   - `atmosphere`
-   - `objects`
-8. Derive a deduplicated object queue from all `objects` where `generate_as_3d_object` is `true`.
-9. Present the proposed image analyses and object queue to the user. Keep the summary concise, but include enough detail to approve or revise:
-   - scene name and short caption for each image
-   - environment, visual style, lighting, and atmosphere
-   - object candidates with descriptions and evidence
-10. Ask the user to approve or request changes. Do not write or replace `objects.json` until the user approves.
-11. When approved, write:
-    - `worlds/$0/image.json` with full per-image analysis
-    - `worlds/$0/objects.json` with the deduplicated 3D object queue
-12. In `objects.json`, ensure each object has stable `id`, `name`, `description`, `evidence`, `source_images`, `status`, and `working_dir`. New objects should use `status: "pending"` and `working_dir: "worlds/$0/output/<object-id>"`. Existing completed objects should remain `completed` unless explicitly marked for regeneration.
-13. Refresh project state:
+4. Gather source images from explicit paths in `$ARGUMENTS` and `worlds/$0/source/`. Use `input/` only through the project-state staging step so source paths are stable.
+5. Analyze one source image at a time:
+   - Read the image directly using agent image understanding.
+   - Use literal, observational language only.
+   - Write a sibling JSON file at `worlds/$0/source/<image-name>.json`.
+   - Per-image JSON must use the same flat schema as root `image.json`.
+   - Per-image JSON must not contain `images[]`.
+6. Treat existing `worlds/$0/source/<image-name>.json` files as reusable analysis:
+   - If the source image or user instruction changed, update the sibling JSON.
+   - If the user deleted a source image or source JSON, do not recreate it unless the image still exists and should be analyzed.
+7. After all per-image JSON files exist, derive `worlds/$0/image.json` by reading and merging all valid `worlds/$0/source/*.json` image analyses:
+   - combine `source_images`
+   - synthesize one shared `scene_name`, `short_caption`, and `literal_description`
+   - merge `environment`, `visual_style`, `lighting`, `atmosphere`, and `ambient_sound`
+   - deduplicate `objects` while preserving source-image evidence
+   - use the same flat schema as each per-image JSON
+   - do not write `images[]`
+8. Present the root image analysis and merged object candidates to the user for approval or revision. Keep it concise:
+   - scene name and short caption
+   - literal environment, visual style, lighting, atmosphere, and ambient sound
+   - object candidates with material and source-image evidence
+9. When approved, create or update one object file per approved object:
+
+```text
+worlds/$0/output/<object-slug>/object.json
+```
+
+10. Each `object.json` should use this shape:
+
+```json
+{
+  "schema_version": 1,
+  "world": "$0",
+  "object": {
+    "id": "<object-slug>",
+    "name": "<object name>",
+    "description": "<literal object description>",
+    "materials": [],
+    "source_images": [],
+    "evidence": [],
+    "status": "pending",
+    "working_dir": "worlds/$0/output/<object-slug>"
+  },
+  "runs": [],
+  "files": {},
+  "updated_at": "..."
+}
+```
+
+New objects should use `status: "pending"`. Existing completed objects should remain `completed` unless explicitly marked for regeneration. Object candidates remain in per-image JSON and root `image.json` as descriptive fallback data; object generation state lives in `object.json`.
+
+11. Refresh derived project state:
 
 ```bash
 node .claude/scripts/project/project-state.mjs --world "$0"
 ```
 
-14. Report saved paths, image count, pending object count, completed object count, and regeneration count.
+12. Report saved paths, source image count, per-image JSON count, created/updated object directory count, pending object count, completed object count, and regeneration count.
 
 ## Output Locations
 
-- Rich image analysis: `worlds/$0/image.json`
-- 3D object queue: `worlds/$0/objects.json`
+- Per-image analysis: `worlds/$0/source/<image-name>.json`
+- Merged image and scene analysis: `worlds/$0/image.json`
+- Object state: `worlds/$0/output/<object-slug>/object.json`

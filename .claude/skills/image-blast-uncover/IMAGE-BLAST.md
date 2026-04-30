@@ -1,42 +1,56 @@
 # IMAGE-BLAST
 
-Use this prompt/spec to uncover rich image information for downstream world and object generation.
+Use this prompt/spec to create literal image and scene descriptions for downstream world, object, and sound generation.
 
 ## Goal
 
-For each image, produce a precise, evocative, structured analysis. Capture both literal scene contents and the less tangible qualities that future agents need: mood, atmosphere, lighting, materials, and what can be separated into rigid 3D objects.
+Analyze one source image at a time and write a sibling JSON file next to it in `source/`. After every source image has a sibling JSON analysis, merge those flat records into the root `image.json`.
 
-## Image Analysis Rules
+Per-image JSON and root `image.json` use the same flat schema. Do not write an `images[]` array anywhere.
 
-- Analyze the whole image first, then identify separable objects.
-- Be concrete. Prefer visible evidence over guesses.
-- Include uncertain details only in descriptions when useful; do not invent hidden objects.
+## Literal Description Rules
+
+- Describe the image like a technical scene survey.
+- Prefer concrete visible evidence over interpretation.
+- Do not write narrative phrases such as "feels like", "hints at", "suggests", "under surveillance", "relics", "mysterious", "lonely", or similar editorial framing.
+- Keep descriptions useful for generation prompts: subject, arrangement, material, color, shape, lighting, camera/view, and environmental effects.
+- If something is uncertain, do not make assumptions about it; describe only what is certain.
 - Deduplicate repeated objects. If many similar jars, rocks, chairs, or tools appear, represent them as one unique object with a `count_estimate`.
-- For `objects`, include only things that can be cleanly distinguished into rigid or mostly rigid objects. Avoid sky, fog, terrain, walls, floors, ceilings, whole buildings, and broad environment surfaces unless they are clearly standalone props.
-- Preserve stable object IDs if updating an existing analysis or object manifest.
+- For objects, include only things that can be cleanly distinguished into rigid or mostly rigid objects. Avoid sky, fog, terrain, walls, floors, ceilings, whole buildings, and broad environment surfaces unless they are clearly standalone props.
+- Preserve stable object IDs if updating existing object directories.
 
-## Per-Image JSON Shape
+## Shared JSON Shape
+
+Use this exact flat shape for both `worlds/<slug>/source/<image-name>.json` and `worlds/<slug>/image.json`:
 
 ```json
 {
-  "image_path": "input/example.png",
-  "slug": "misty-forest-path",
-  "scene_name": "Misty Forest Path",
-  "short_caption": "A misty forest path glowing with soft morning light.",
-  "long_description": "About 100 words describing the entire subject, feeling, atmosphere, visual effects, spatial impression, and how a person would describe the image overall.",
-  "environment": "About 20 words describing the physical setting and ambient world qualities.",
-  "visual_style": "photorealistic, cinematic, painterly, game-like, documentary, etc.",
-  "lighting": "Direction, softness, color temperature, contrast, shadow quality, and time of day.",
-  "atmosphere": "Fog, dust, haze, smoke, glow, weather, particles, humidity, magical effects, or other ambient effects.",
+  "schema_version": 1,
+  "world": "sterile-electronic-lab",
+  "source_images": ["worlds/sterile-electronic-lab/source/example.png"],
+  "scene_name": "Sterile Electronic Lab",
+  "short_caption": "A clinical room with glass display cases and ceramic vessels.",
+  "literal_description": "A compact room contains rows of aluminum-framed glass enclosures. Each enclosure holds terracotta ceramic vessels on dark pedestals. A computer workstation sits against the left wall. The room has pale walls, a tiled floor, and even overhead fluorescent lighting.",
+  "environment": "Compact indoor display or storage room with glass enclosures, tiled floor, pale walls, and a workstation.",
+  "visual_style": "photorealistic, clinical, documentary",
+  "lighting": "Even overhead fluorescent lighting, cool color temperature, low contrast, soft shadows.",
+  "atmosphere": "Clean indoor air with no visible fog, smoke, dust, haze, or weather.",
+  "ambient_sound": "Minimal seamless loop: low ventilation hum and faint fluorescent buzz. No voices, music, impacts, or dramatic one-shot sounds.",
   "objects": [
     {
-      "id": "weathered-lantern",
-      "name": "weathered lantern",
-      "description": "Detailed rigid object description useful for later image isolation and 3D generation.",
-      "count_estimate": 1,
-      "materials": ["aged metal", "glass"],
-      "location_in_image": "right foreground",
-      "separability": "clean",
+      "id": "terracotta-amphora",
+      "name": "terracotta amphora",
+      "description": "Tall two-handled terracotta ceramic vessel with a narrow neck and rounded body.",
+      "count_estimate": 3,
+      "materials": ["terracotta ceramic"],
+      "source_images": ["worlds/sterile-electronic-lab/source/example.png"],
+      "evidence": [
+        {
+          "image": "worlds/sterile-electronic-lab/source/example.png",
+          "location_in_image": "inside glass cases along the back wall",
+          "separability": "clean"
+        }
+      ],
       "generate_as_3d_object": true
     }
   ]
@@ -45,16 +59,34 @@ For each image, produce a precise, evocative, structured analysis. Capture both 
 
 ## Field Guidance
 
-- `slug`: 2-3 word lowercase hyphenated scene name suitable for folders.
-- `scene_name`: human-readable 2-3 word title.
-- `short_caption`: about 10 words.
-- `long_description`: about 100 words; describe the whole image, feeling, tone, subject, atmosphere, and visible effects.
-- `environment`: about 20 words; describe where the image is physically situated and what ambient world qualities matter.
-- `visual_style`: concise style labels and rendering qualities.
-- `lighting`: include direction, softness, temperature, contrast, shadow quality, and time of day.
-- `atmosphere`: include fog, dust, haze, smoke, glow, weather, particles, or other ambient effects.
-- `objects`: unique rigid object candidates that can be separated cleanly and generated later.
+- `source_images`: image provenance. Per-image JSON usually has one path; root `image.json` has all merged source image paths.
+- `scene_name`: short human-readable scene name.
+- `short_caption`: about 10 words, literal and factual.
+- `literal_description`: factual visible description only. Do not include narrative, symbolism, or editorial language.
+- `environment`: physical setting and visible environmental conditions only.
+- `visual_style`: concise visual/rendering labels only.
+- `lighting`: visible direction, softness, temperature, contrast, shadow quality, and time of day only when evident.
+- `atmosphere`: visible fog, dust, haze, smoke, glow, weather, particles, or explicitly state none visible.
+- `ambient_sound`: minimal looping ambience based on visible regular or periodic sound sources only. Include no voices, music, impacts, alarms, dramatic hits, or non-looping one-shots.
+- `objects`: persisted descriptive object candidates. These are fallback/debug data, not generation state.
+
+## Merge Rules
+
+To create root `worlds/<slug>/image.json`, read all valid `worlds/<slug>/source/*.json` image analyses and merge them into the same flat schema:
+
+- Combine `source_images`.
+- Synthesize one shared `scene_name`, `short_caption`, and `literal_description`.
+- Merge `environment`, `visual_style`, `lighting`, `atmosphere`, and `ambient_sound` from common or representative visible traits.
+- Deduplicate `objects` by stable `id`, name, material, and visible shape.
+- Preserve all source image evidence on merged objects.
+- Do not write an `images[]` array.
 
 ## Object Extraction
 
-After creating per-image analysis, derive `objects.json` from all objects where `generate_as_3d_object` is `true`. Merge visually similar objects across images into one object record while preserving evidence from each source image.
+After root `image.json` is approved, create or update one `object.json` per approved object at:
+
+```text
+worlds/<slug>/output/<object-slug>/object.json
+```
+
+Each object file should contain the stable object ID, name, literal description, materials, source image paths, evidence, generation status, and working directory. The object file is the generation source of truth.

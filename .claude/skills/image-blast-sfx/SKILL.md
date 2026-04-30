@@ -2,7 +2,7 @@
 name: image-blast-sfx
 description: Generate world ambience loops, object impact sounds, or arbitrary sound effects with the FAL ElevenLabs SFX endpoint. Use when the user asks for SFX, ambient audio, looping scene sound, collision sounds, impact sounds, or object audio.
 argument-hint: [world-name] [optional object-id or SFX prompt/instructions]
-allowed-tools: Read Write Bash(node *) Glob
+allowed-tools: Read Write Glob Bash(node .claude/scripts/project/project-state.mjs *) Bash(node .claude/scripts/sfx/fal-elevenlabs-sfx.mjs *)
 context: fork
 agent: general-purpose
 ---
@@ -12,7 +12,7 @@ Generate sound effects for project `$0`. Additional object IDs, prompts, loop in
 ## Instructions
 
 1. Require a project/world slug in `$0`. If missing, ask which `worlds/<world-name>/` directory to use.
-2. Ensure the project envelope exists and read current state:
+2. Ensure the project envelope exists and read derived state:
 
 ```bash
 node .claude/scripts/project/project-state.mjs --world "$0"
@@ -24,15 +24,15 @@ node .claude/scripts/project/project-state.mjs --world "$0"
 **World ambience mode**
 
 - Use when the user asks for ambient/world/scene/background audio.
-- Read `worlds/$0/description.json` if it exists. If not, read `worlds/$0/image.json`, then `worlds/$0/project.json`, then `worlds/$0/output/world/world.json` as fallback context.
-- Compose one concise prompt for a seamless looping ambient soundscape based on the world environment, atmosphere, visual style, lighting, weather, and mood.
+- Read `ambient_sound` and the other literal scene/world fields in `worlds/$0/image.json`.
+- Prefer `image.json.ambient_sound` as the prompt basis. If it is missing, compose one concise prompt for a seamless looping ambient soundscape based on the literal environment, atmosphere, visual style, lighting, weather, and visible materials. Do not add narrative or emotional interpretation.
 - Output to `worlds/$0/output/sfx/`.
 - Use `--loop --count 1 --kind world-ambience --prefix ambient-loop`.
 
 **Object impact mode**
 
 - Use when the user names an object or asks what an object sounds like when it hits, bumps, drops, scrapes, or knocks into something.
-- Read `worlds/$0/objects.json` and, if present, `worlds/$0/output/<object-id>/object.json`.
+- Resolve the object by scanning `worlds/$0/output/*/object.json`, then read `worlds/$0/output/<object-id>/object.json`.
 - Compose one prompt for short non-looping impact sounds that match the object's material, mass, hollowness, fragility, and likely collision surfaces.
 - Generate exactly 4 sounds.
 - Output to `worlds/$0/output/<object-id>/sfx/`.

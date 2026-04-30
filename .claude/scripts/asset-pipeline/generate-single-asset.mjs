@@ -18,7 +18,7 @@ async function readJsonIfExists(filePath) {
   return (await pathExists(filePath)) ? readJson(filePath) : undefined;
 }
 
-function collectSourceImages(object, manifest, directImage) {
+function collectSourceImages(object, directImage) {
   const images = new Set();
 
   if (directImage) images.add(directImage);
@@ -29,13 +29,6 @@ function collectSourceImages(object, manifest, directImage) {
 
   for (const evidence of object.evidence || []) {
     if (evidence.image) images.add(evidence.image);
-  }
-
-  if (images.size === 0) {
-    for (const image of manifest?.source_images || []) {
-      images.add(image);
-      if (images.size >= 3) break;
-    }
   }
 
   return [...images];
@@ -77,45 +70,50 @@ Requirements:
 }
 
 async function resolveObject(options) {
-  const {
-    world,
-    objectId,
-    manifestPath = `worlds/${world}/objects.json`,
-    directImage,
-    objectName,
-    description
-  } = options;
-
-  const manifest = await readJsonIfExists(manifestPath);
-  const manifestObject = objectId
-    ? manifest?.objects?.find((candidate) => candidate.id === objectId)
+  const { world, objectId, directImage, objectName, description } = options;
+  const directObject = directImage
+    ? buildDirectObject({ objectId, objectName, description, image: directImage, world })
     : undefined;
+  const resolvedId = objectId || directObject?.id;
 
-  if (manifestObject) {
-    return { manifest, object: manifestObject, manifestPath };
+  if (!resolvedId) {
+    throw new Error("objectId or directImage is required.");
   }
 
-  if (directImage) {
+  const objectDir = `worlds/${world}/output/${resolvedId}`;
+  const objectJsonPath = path.join(objectDir, "object.json");
+  const existing = await readJsonIfExists(objectJsonPath);
+
+  if (existing?.object) {
     return {
-      manifest,
-      object: buildDirectObject({
-        objectId,
-        objectName,
-        description,
-        image: directImage,
-        world
-      }),
-      manifestPath
+      object: {
+        ...existing.object,
+        ...(directImage
+          ? {
+              source_images: [...new Set([...(existing.object.source_images || []), directImage])],
+              evidence: [
+                ...(existing.object.evidence || []),
+                { image: directImage, notes: "Direct single-image object input" }
+              ]
+            }
+          : {})
+      },
+      objectDir,
+      objectJsonPath,
+      previous: existing
     };
   }
 
-  if (!manifest) {
-    throw new Error(
-      `No object manifest found at ${manifestPath}. Provide --image and --object-name for direct single-image generation.`
-    );
+  if (directObject) {
+    return {
+      object: directObject,
+      objectDir,
+      objectJsonPath,
+      previous: undefined
+    };
   }
 
-  throw new Error(`Object ${objectId} was not found in ${manifestPath}.`);
+  throw new Error(`Object file not found: ${objectJsonPath}`);
 }
 
 async function nextNumberedImagePath(objectDir, objectId, sourcePath) {
@@ -147,7 +145,6 @@ export async function generateSingleObject(options) {
   const {
     world,
     objectId,
-    manifestPath = `worlds/${world}/objects.json`,
     directImage,
     objectName,
     description,
@@ -161,7 +158,6 @@ export async function generateSingleObject(options) {
   const resolved = await resolveObject({
     world,
     objectId,
-    manifestPath,
     directImage,
     objectName,
     description
@@ -169,14 +165,12 @@ export async function generateSingleObject(options) {
 
   const object = {
     ...resolved.object,
+    working_dir: resolved.object.working_dir || resolved.objectDir,
     status: "in_progress"
   };
-  const objectDir = object.working_dir || `worlds/${world}/output/${object.id}`;
-  await ensureDir(objectDir);
+  await ensureDir(resolved.objectDir);
 
-  const objectJsonPath = path.join(objectDir, "object.json");
-  const previous = await readJsonIfExists(objectJsonPath);
-  const sourceImages = collectSourceImages(object, resolved.manifest, directImage);
+  const sourceImages = collectSourceImages(object, directImage);
   if (sourceImages.length === 0) {
     throw new Error(`Object ${object.id} does not have source images for image editing.`);
   }
@@ -185,33 +179,29 @@ export async function generateSingleObject(options) {
   const started = {
     schema_version: 1,
     world,
-    manifest_path: resolved.manifest ? manifestPath : undefined,
-    object: {
-      ...object,
-      working_dir: objectDir
-    },
+    object,
     runs: [
-      ...(previous?.runs || []),
+      ...(resolved.previous?.runs || []),
       {
         id: runId,
         status: "in_progress",
-        regenerate: Boolean(regenerate || previous),
+        regenerate: Boolean(regenerate || resolved.previous),
         started_at: runId,
-        output_dir: objectDir
+        output_dir: resolved.objectDir
       }
     ],
-    previous_completed_at: previous?.completed_at,
+    previous_completed_at: resolved.previous?.completed_at,
     updated_at: new Date().toISOString(),
-    files: previous?.files || {}
+    files: resolved.previous?.files || {}
   };
-  await writeJson(objectJsonPath, started);
+  await writeJson(resolved.objectJsonPath, started);
 
   try {
     const imageEdit = await runImageEdit({
       provider: imageEditProvider || object.image_edit_provider,
       prompt: buildPrompt(object),
       images: sourceImages,
-      outputDir: objectDir,
+      outputDir: resolved.objectDir,
       numImages: 1,
       resolution: "1K",
       aspectRatio: "1:1",
@@ -223,9 +213,9 @@ export async function generateSingleObject(options) {
     if (!rawGeneratedImage) {
       throw new Error(`Image edit did not return a downloadable image for ${object.id}.`);
     }
-    const generatedImage = await normalizeReferenceImage(rawGeneratedImage, objectDir, object.id);
+    const generatedImage = await normalizeReferenceImage(rawGeneratedImage, resolved.objectDir, object.id);
 
-    await writeJson(objectJsonPath, {
+    await writeJson(resolved.objectJsonPath, {
       ...started,
       object: {
         ...started.object,
@@ -236,14 +226,14 @@ export async function generateSingleObject(options) {
         ...started.files,
         source_images: sourceImages,
         reference_image: generatedImage.path,
-        image_edit: path.join(objectDir, "image-edit-files.json"),
+        image_edit: path.join(resolved.objectDir, "image-edit-files.json"),
         image_edit_provider: imageEdit.provider
       }
     });
 
     const hunyuan = await runHunyuan3D({
       image: generatedImage.path,
-      outputDir: objectDir,
+      outputDir: resolved.objectDir,
       assetName: object.name,
       enablePbr: true,
       generateType: "Normal",
@@ -274,9 +264,9 @@ export async function generateSingleObject(options) {
       files: {
         source_images: sourceImages,
         reference_image: generatedImage.path,
-        image_edit: path.join(objectDir, "image-edit-files.json"),
+        image_edit: path.join(resolved.objectDir, "image-edit-files.json"),
         image_edit_provider: imageEdit.provider,
-        hunyuan_3d: path.join(objectDir, "hunyuan-3d-files.json"),
+        hunyuan_3d: path.join(resolved.objectDir, "hunyuan-3d-files.json"),
         downloaded_model_files: hunyuan.downloaded_files.map((file) => file.path)
       },
       results: {
@@ -286,7 +276,7 @@ export async function generateSingleObject(options) {
       }
     };
 
-    await writeJson(objectJsonPath, completed);
+    await writeJson(resolved.objectJsonPath, completed);
     return completed;
   } catch (error) {
     const runs = started.runs.map((run) =>
@@ -311,7 +301,7 @@ export async function generateSingleObject(options) {
       failed_at: new Date().toISOString(),
       error: error.message
     };
-    await writeJson(objectJsonPath, failed);
+    await writeJson(resolved.objectJsonPath, failed);
     throw error;
   }
 }
@@ -337,8 +327,7 @@ async function main() {
     objectName: one(flags, "object-name") || one(flags, "asset-name"),
     description: one(flags, "description"),
     regenerate: Boolean(flags.regenerate),
-    imageEditProvider: one(flags, "image-edit-provider"),
-    manifestPath: one(flags, "manifest", `worlds/${world}/objects.json`)
+    imageEditProvider: one(flags, "image-edit-provider")
   });
 
   console.log(JSON.stringify(result, null, 2));

@@ -2,7 +2,7 @@
 name: image-blast-world
 description: Generate a World Labs world for an Image Blast project. Use after /image-blast-project or /image-blast-uncover when the user wants the navigable 3D world output.
 argument-hint: [world-name] [optional world prompt or instructions]
-allowed-tools: Bash(node *) Bash(curl *) Bash(base64 *) Bash(sleep *) Bash(mv *) Write Read Glob
+allowed-tools: Read Write Glob Bash(node .claude/scripts/project/project-state.mjs *) Bash(curl *) Bash(base64 *) Bash(sleep *)
 context: fork
 agent: general-purpose
 ---
@@ -15,7 +15,7 @@ Create or resume a World Labs world for project `$0`. Additional prompt text or 
 
 Require a project/world slug in `$0`. If it is missing, ask which `worlds/<world-name>/` directory to use.
 
-Ensure the project envelope exists and read current state:
+Ensure the project envelope exists and read derived state:
 
 ```bash
 node .claude/scripts/project/project-state.mjs --world "$0"
@@ -37,9 +37,15 @@ Use:
 
 Prefer stable source images in `worlds/$0/source/`. If the user explicitly provided an image path in `$ARGUMENTS`, use it.
 
-If no source image is found in `worlds/$0/source/`, check `input/` for any image file (`.jpg`, `.jpeg`, `.png`, `.webp`). If found, use image prompt mode and move the file to `worlds/$0/source/` after the world is created.
+If no source image is found in `worlds/$0/source/`, run project staging once:
 
-If no image is found anywhere, use text prompt mode with the world prompt from `$ARGUMENTS`.
+```bash
+node .claude/scripts/project/project-state.mjs --world "$0" --stage-input
+```
+
+Then check `worlds/$0/source/` again.
+
+If no image is found anywhere, use text prompt mode. Prefer the flat literal scene/world fields in `worlds/$0/image.json` for the text prompt, supplemented by `$ARGUMENTS`. If `image.json` is missing, use the world prompt from `$ARGUMENTS`.
 
 ### 4. Create the world
 
@@ -92,9 +98,7 @@ Update `worlds/$0/output/world/operation.json` each poll.
 
 When complete, write `response` from the operation to `worlds/$0/output/world/world.json`.
 
-### 7. Move staged files and refresh state
-
-If a source image came from `input/`, move it to `worlds/$0/source/`.
+### 7. Refresh state
 
 Refresh project state:
 

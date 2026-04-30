@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readdir } from "node:fs/promises";
+import { readdir, rename } from "node:fs/promises";
 import path from "node:path";
 import {
   ensureDir,
@@ -12,6 +12,18 @@ import {
 } from "../asset-pipeline/fal-queue.mjs";
 
 const PROJECT_DIRS = ["source", "output", "output/world", "output/sfx", "scene"];
+const RESERVED_OUTPUT_DIRS = new Set(["world", "sfx"]);
+const STAGE_EXTENSIONS = new Set([
+  ".avif",
+  ".gif",
+  ".heic",
+  ".heif",
+  ".jpeg",
+  ".jpg",
+  ".png",
+  ".webp"
+]);
+const ANALYSIS_EXTENSION = ".json";
 
 async function readJsonIfExists(filePath) {
   return (await pathExists(filePath)) ? readJson(filePath) : undefined;
@@ -42,21 +54,110 @@ async function listFiles(dirPath) {
   return files;
 }
 
-async function objectCounts(worldDir, objects) {
+function isSourceImage(filePath) {
+  return STAGE_EXTENSIONS.has(path.extname(filePath).toLowerCase());
+}
+
+function isSourceAnalysis(filePath) {
+  return path.extname(filePath).toLowerCase() === ANALYSIS_EXTENSION;
+}
+
+async function nextAvailablePath(filePath) {
+  if (!(await pathExists(filePath))) return filePath;
+
+  const dir = path.dirname(filePath);
+  const ext = path.extname(filePath);
+  const base = path.basename(filePath, ext);
+  let index = 1;
+
+  while (true) {
+    const candidate = path.join(dir, `${base}-${index}${ext}`);
+    if (!(await pathExists(candidate))) return candidate;
+    index += 1;
+  }
+}
+
+async function stageInputFiles(worldDir, inputDir = "input") {
+  if (!(await pathExists(inputDir))) return [];
+
+  const sourceDir = path.join(worldDir, "source");
+  await ensureDir(sourceDir);
+  const staged = [];
+  const entries = await readdir(inputDir, { withFileTypes: true });
+
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    const extension = path.extname(entry.name).toLowerCase();
+    if (!STAGE_EXTENSIONS.has(extension)) continue;
+
+    const from = path.join(inputDir, entry.name);
+    const to = await nextAvailablePath(path.join(sourceDir, entry.name));
+    await rename(from, to);
+    staged.push({ from, to });
+  }
+
+  return staged;
+}
+
+async function scanObjects(worldDir) {
+  const outputDir = path.join(worldDir, "output");
+  if (!(await pathExists(outputDir))) return [];
+
+  const entries = await readdir(outputDir, { withFileTypes: true });
+  const objects = [];
+
+  for (const entry of entries) {
+    if (!entry.isDirectory() || RESERVED_OUTPUT_DIRS.has(entry.name)) continue;
+
+    const objectDir = path.join(outputDir, entry.name);
+    const objectPath = path.join(objectDir, "object.json");
+    const objectJson = await readJsonIfExists(objectPath);
+    if (!objectJson) continue;
+
+    const object = objectJson.object || objectJson;
+    objects.push({
+      id: object.id || entry.name,
+      name: object.name || entry.name,
+      status: object.status || "pending",
+      working_dir: object.working_dir || objectDir,
+      object_json: objectPath,
+      has_sfx: await pathExists(path.join(objectDir, "sfx", "sfx.json")),
+      updated_at: objectJson.updated_at
+    });
+  }
+
+  return objects.sort((a, b) => a.id.localeCompare(b.id));
+}
+
+function objectCounts(objects) {
   const counts = { pending: 0, completed: 0, failed: 0 };
   for (const object of objects) {
-    const objectId = object.id || slugify(object.name || "object");
-    const objectDir = object.working_dir || path.join(worldDir, "output", objectId);
-    const objectJson = await readJsonIfExists(path.join(objectDir, "object.json"));
-    const status = objectJson?.object?.status || object.status || "pending";
+    const status = object.status || "pending";
     if (counts[status] === undefined) counts[status] = 0;
     counts[status] += 1;
   }
   return counts;
 }
 
+function minimalProject({ slug, displayName, existingProject }) {
+  return {
+    schema_version: 1,
+    slug,
+    display_name: displayName || existingProject?.display_name || displayNameFromSlug(slug),
+    created_at: existingProject?.created_at || new Date().toISOString(),
+    notes: existingProject?.notes || undefined
+  };
+}
+
 export async function ensureProjectState(options) {
-  const { slug: rawSlug, description, displayName, write = true } = options;
+  const {
+    slug: rawSlug,
+    description,
+    displayName,
+    write = true,
+    stageInput = false,
+    inputDir = "input"
+  } = options;
   const slug = slugify(rawSlug || description || displayName || "");
   if (!slug) throw new Error("A project slug or description is required.");
 
@@ -67,64 +168,69 @@ export async function ensureProjectState(options) {
 
   const projectPath = path.join(worldDir, "project.json");
   const existingProject = await readJsonIfExists(projectPath);
+  const project = minimalProject({ slug, displayName, existingProject });
+  if (write) await writeJson(projectPath, project);
+
+  const staged_files = stageInput ? await stageInputFiles(worldDir, inputDir) : [];
   const imagePath = path.join(worldDir, "image.json");
-  const objectsPath = path.join(worldDir, "objects.json");
   const worldJsonPath = path.join(worldDir, "output", "world", "world.json");
   const operationJsonPath = path.join(worldDir, "output", "world", "operation.json");
-  const sfxPath = path.join(worldDir, "output", "sfx");
+  const worldSfxPath = path.join(worldDir, "output", "sfx");
   const scenePath = path.join(worldDir, "scene", "project.json");
-
-  const objectsFile = await readJsonIfExists(objectsPath);
-  const objects = objectsFile?.objects || [];
+  const objects = await scanObjects(worldDir);
   const sourceFiles = await listFiles(path.join(worldDir, "source"));
-  const sfxFiles = await listFiles(sfxPath);
-  const counts = await objectCounts(worldDir, objects);
+  const sourceImageFiles = sourceFiles.filter(isSourceImage);
+  const sourceAnalysisFiles = sourceFiles.filter(isSourceAnalysis);
+  const worldSfxFiles = await listFiles(worldSfxPath);
+  const objectSfxCount = objects.filter((object) => object.has_sfx).length;
 
-  const project = {
+  return {
     schema_version: 1,
-    slug,
-    display_name: displayName || existingProject?.display_name || displayNameFromSlug(slug),
-    created_at: existingProject?.created_at || new Date().toISOString(),
-    updated_at: new Date().toISOString(),
+    project,
+    project_json: projectPath,
+    staged_files,
     source_files: sourceFiles,
+    source_image_files: sourceImageFiles,
+    source_analysis_files: sourceAnalysisFiles,
+    objects,
     paths: {
       root: worldDir,
       source: path.join(worldDir, "source"),
       output: path.join(worldDir, "output"),
       world: path.join(worldDir, "output", "world"),
-      sfx: sfxPath,
+      sfx: worldSfxPath,
       scene: path.join(worldDir, "scene"),
-      image: imagePath,
-      objects: objectsPath
+      image: imagePath
     },
     state: {
       has_world: await pathExists(worldJsonPath),
       has_world_operation: await pathExists(operationJsonPath),
       has_image: await pathExists(imagePath),
-      has_objects: await pathExists(objectsPath),
-      object_counts: counts,
-      has_sfx: sfxFiles.length > 0,
-      sfx_count: sfxFiles.length,
+      source_image_count: sourceImageFiles.length,
+      source_analysis_count: sourceAnalysisFiles.length,
+      object_counts: objectCounts(objects),
+      has_sfx: worldSfxFiles.length > 0 || objectSfxCount > 0,
+      world_sfx_count: worldSfxFiles.length,
+      object_sfx_count: objectSfxCount,
       has_scene: await pathExists(scenePath)
     }
   };
-
-  if (write) await writeJson(projectPath, project);
-  return project;
 }
 
 async function main() {
   const { flags, positionals } = parseArgs();
   const slug = one(flags, "world") || one(flags, "slug") || positionals[0];
   const description = one(flags, "description") || positionals.join(" ");
-  const project = await ensureProjectState({
+  const state = await ensureProjectState({
     slug,
     description,
     displayName: one(flags, "display-name"),
-    write: one(flags, "write", "true") !== "false"
+    write: one(flags, "write", "true") !== "false",
+    stageInput: Boolean(flags["stage-input"]),
+    inputDir: one(flags, "input-dir", "input")
   });
 
-  console.log(JSON.stringify(project, null, 2));
+  console.log(JSON.stringify(state, null, 2));
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
