@@ -35,7 +35,7 @@ Use:
 
 ### 3. Identify source image
 
-Prefer stable source images in `worlds/$0/source/`. If the user explicitly provided an image path in `$ARGUMENTS`, use it.
+Prefer stable source images in `worlds/$0/source/`. Source images use indexed families (`0-<slug>.<ext>`, `1-<slug>.png`, etc.); use the latest image in the relevant family by default. If the user explicitly provided an image path in `$ARGUMENTS`, use it.
 
 If no source image is found in `worlds/$0/source/`, run project staging once:
 

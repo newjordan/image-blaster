@@ -10,6 +10,7 @@ import {
   toModelInputUrl,
   writeJson
 } from "./fal-queue.mjs";
+import { buildRequestSummary, requestPath } from "./request-metadata.mjs";
 
 const ENDPOINT = "openai/gpt-image-2/edit";
 
@@ -22,7 +23,11 @@ export async function runGptImage2Edit(options) {
     imageSize = "auto",
     quality = "medium",
     outputFormat = "png",
-    maskImage
+    maskImage,
+    metadataPath,
+    metadata = {},
+    onSubmit,
+    onStatus
   } = options;
 
   if (!prompt) throw new Error("GPT Image 2 prompt is required.");
@@ -49,34 +54,28 @@ export async function runGptImage2Edit(options) {
     input.mask_image_url = await toModelInputUrl(maskImage);
   }
 
-  await writeJson(path.join(outputDir, "gpt-image-2-input.json"), {
-    endpoint: ENDPOINT,
-    prompt,
-    images,
-    input: {
-      ...input,
-      image_urls: imageUrls.map((url) => (url.startsWith("data:") ? "[inline-data-uri]" : url)),
-      mask_image_url: input.mask_image_url?.startsWith("data:") ? "[inline-data-uri]" : input.mask_image_url
-    }
-  });
-
   const result = await callFalQueue(ENDPOINT, input, {
-    outputDir,
-    prefix: "gpt-image-2"
+    metadataPath: metadataPath || requestPath(outputDir, 0, "gpt-image-2"),
+    metadata: { kind: "2d", provider: ENDPOINT, ...metadata },
+    onSubmit,
+    onStatus
   });
 
   const downloaded = await downloadRemoteFiles(result.data, outputDir, "gpt-image-2");
-  const summary = {
-    provider: "gpt-image-2",
-    endpoint: ENDPOINT,
-    request_id: result.requestId,
+  const summary = buildRequestSummary({
+    kind: "2d",
+    provider: ENDPOINT,
+    metadata,
+    requestId: result.requestId,
+    submittedAt: result.submittedAt,
     prompt,
-    output_dir: outputDir,
-    downloaded_files: downloaded,
+    inputFiles: images,
+    outputFiles: downloaded.map((file) => file.path),
+    downloadedFiles: downloaded,
     result: result.data
-  };
+  });
 
-  await writeJson(path.join(outputDir, "gpt-image-2-files.json"), summary);
+  await writeJson(metadataPath || requestPath(outputDir, 0, "gpt-image-2"), summary);
   return summary;
 }
 

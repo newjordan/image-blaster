@@ -10,6 +10,12 @@ import {
   slugify,
   writeJson
 } from "../asset-pipeline/fal-queue.mjs";
+import {
+  artifactPath,
+  isHiddenRequestMetadata,
+  isVisibleFile,
+  parseIndexedName
+} from "../asset-pipeline/request-metadata.mjs";
 
 const PROJECT_DIRS = ["source", "output", "output/world", "output/sfx", "scene"];
 const RESERVED_OUTPUT_DIRS = new Set(["world", "sfx"]);
@@ -55,11 +61,16 @@ async function listFiles(dirPath) {
 }
 
 function isSourceImage(filePath) {
-  return STAGE_EXTENSIONS.has(path.extname(filePath).toLowerCase());
+  return isVisibleFile(filePath) && STAGE_EXTENSIONS.has(path.extname(filePath).toLowerCase());
 }
 
 function isSourceAnalysis(filePath) {
-  return path.extname(filePath).toLowerCase() === ANALYSIS_EXTENSION;
+  return isVisibleFile(filePath) && path.extname(filePath).toLowerCase() === ANALYSIS_EXTENSION;
+}
+
+function isVisibleGeneratedFile(filePath) {
+  const fileName = path.basename(filePath);
+  return !isHiddenRequestMetadata(filePath) && isVisibleFile(filePath) && fileName !== "sfx.json";
 }
 
 async function nextAvailablePath(filePath) {
@@ -91,7 +102,11 @@ async function stageInputFiles(worldDir, inputDir = "input") {
     if (!STAGE_EXTENSIONS.has(extension)) continue;
 
     const from = path.join(inputDir, entry.name);
-    const to = await nextAvailablePath(path.join(sourceDir, entry.name));
+    const parsed = parseIndexedName(entry.name);
+    const stagedName = parsed?.index === 0
+      ? entry.name
+      : path.basename(artifactPath(sourceDir, 0, slugify(path.basename(entry.name, extension)), extension));
+    const to = await nextAvailablePath(path.join(sourceDir, stagedName));
     await rename(from, to);
     staged.push({ from, to });
   }
@@ -181,7 +196,7 @@ export async function ensureProjectState(options) {
   const sourceFiles = await listFiles(path.join(worldDir, "source"));
   const sourceImageFiles = sourceFiles.filter(isSourceImage);
   const sourceAnalysisFiles = sourceFiles.filter(isSourceAnalysis);
-  const worldSfxFiles = await listFiles(worldSfxPath);
+  const worldSfxFiles = (await listFiles(worldSfxPath)).filter(isVisibleGeneratedFile);
   const objectSfxCount = objects.filter((object) => object.has_sfx).length;
 
   return {

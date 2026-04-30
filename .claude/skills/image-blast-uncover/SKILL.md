@@ -17,7 +17,7 @@ node .claude/scripts/project/project-state.mjs --world "$0" --stage-input
 ```
 
 3. Read `IMAGE-BLAST.md` in this skill directory and follow its JSON contract exactly.
-4. Gather source images from explicit paths in `$ARGUMENTS` and `worlds/$0/source/`. Use `input/` only through the project-state staging step so source paths are stable.
+4. Gather source images from explicit paths in `$ARGUMENTS` and `worlds/$0/source/`. Use `input/` only through the project-state staging step so source paths are stable. Source images use indexed families (`0-<slug>.<ext>`, `1-<slug>.png`, etc.); by default, analyze the latest image in each family and do not treat every historical plate/edit as separate evidence unless requested.
 5. Analyze one source image at a time:
    - Read the image directly using agent image understanding.
    - Use literal, observational language only.
@@ -60,7 +60,7 @@ worlds/$0/output/<object-slug>/object.json
     "status": "pending",
     "working_dir": "worlds/$0/output/<object-slug>"
   },
-  "runs": [],
+  "jobs": {},
   "files": {},
   "updated_at": "..."
 }

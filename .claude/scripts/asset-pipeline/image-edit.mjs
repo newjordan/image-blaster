@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import { runGptImage2Edit } from "./gpt-image-2-edit.mjs";
 import { runNanoBananaEdit } from "./nano-banana-edit.mjs";
-import { loadDotEnv, many, one, parseArgs, writeJson } from "./fal-queue.mjs";
+import { loadDotEnv, many, one, parseArgs } from "./fal-queue.mjs";
+import { requestPath } from "./request-metadata.mjs";
 
 const PROVIDERS = new Set(["nano-banana", "gpt-image-2"]);
 
@@ -23,12 +24,14 @@ export async function runImageEdit(options) {
   if (provider === "gpt-image-2") {
     summary = await runGptImage2Edit({
       ...options,
+      metadataPath: options.metadataPath || requestPath(options.outputDir, 0, "image-edit"),
       quality: options.quality || "medium",
       imageSize: options.imageSize || "auto"
     });
   } else {
     summary = await runNanoBananaEdit({
       ...options,
+      metadataPath: options.metadataPath || requestPath(options.outputDir, 0, "image-edit"),
       resolution: options.resolution || "1K",
       aspectRatio: options.aspectRatio || "auto"
     });
@@ -36,12 +39,8 @@ export async function runImageEdit(options) {
 
   const normalizedSummary = {
     ...summary,
-    provider
+    provider_alias: provider
   };
-
-  if (options.outputDir) {
-    await writeJson(`${options.outputDir}/image-edit-files.json`, normalizedSummary);
-  }
 
   return normalizedSummary;
 }

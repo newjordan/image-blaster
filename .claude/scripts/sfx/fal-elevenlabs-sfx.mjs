@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import { readdir } from "node:fs/promises";
 import path from "node:path";
 import {
   callFalQueue,
@@ -9,10 +8,15 @@ import {
   parseArgs,
   pathExists,
   readJson,
-  safeFileName,
   slugify,
   writeJson
 } from "../asset-pipeline/fal-queue.mjs";
+import {
+  artifactPath,
+  buildRequestSummary,
+  nextIndex,
+  requestPath
+} from "../asset-pipeline/request-metadata.mjs";
 
 const ENDPOINT = "fal-ai/elevenlabs/sound-effects/v2";
 const DEFAULT_OUTPUT_FORMAT = "mp3_44100_128";
@@ -46,19 +50,6 @@ function extensionForOutputFormat(outputFormat) {
   if (outputFormat.startsWith("ulaw_")) return ".ulaw";
   if (outputFormat.startsWith("alaw_")) return ".alaw";
   return ".audio";
-}
-
-async function nextAudioPath(outputDir, prefix, extension) {
-  await ensureDir(outputDir);
-  const safePrefix = safeFileName(prefix || "sfx");
-  const entries = await readdir(outputDir, { withFileTypes: true }).catch(() => []);
-  const matcher = new RegExp(`^(\\d+)-${safePrefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\.`);
-  const maxIndex = entries.reduce((max, entry) => {
-    if (!entry.isFile()) return max;
-    const match = entry.name.match(matcher);
-    return match ? Math.max(max, Number(match[1])) : max;
-  }, -1);
-  return path.join(outputDir, `${maxIndex + 1}-${safePrefix}${extension}`);
 }
 
 async function readManifest(manifestPath) {
@@ -107,9 +98,17 @@ export async function generateSfx(options) {
     };
     if (duration !== undefined) input.duration_seconds = duration;
 
+    const audioPrefix = requestedCount > 1 ? `${prefix}-${index + 1}` : prefix;
+    const requestIndex = await nextIndex(outputDir, audioPrefix);
+    const metadataPath = requestPath(outputDir, requestIndex, audioPrefix);
     const result = await callFalQueue(ENDPOINT, input, {
-      outputDir,
-      prefix: `sfx-${index + 1}`,
+      metadataPath,
+      metadata: {
+        kind: "sfx",
+        sfx_kind: kind,
+        provider: ENDPOINT,
+        index: requestIndex
+      },
       pollIntervalMs: 3000
     });
     const audioUrl = result.data?.audio?.url;
@@ -117,7 +116,7 @@ export async function generateSfx(options) {
       throw new Error(`FAL SFX result did not include audio.url: ${JSON.stringify(result.data)}`);
     }
 
-    const audioPath = await nextAudioPath(outputDir, prefix, extension);
+    const audioPath = artifactPath(outputDir, requestIndex, audioPrefix, extension);
     await downloadFile(audioUrl, audioPath);
 
     const file = {
@@ -129,11 +128,34 @@ export async function generateSfx(options) {
     };
     files.push(file);
     requests.push({
+      index: requestIndex,
+      kind: "sfx",
       request_id: result.requestId,
       generated_at: new Date().toISOString(),
       endpoint: ENDPOINT,
-      input,
+      metadata_path: metadataPath,
       file: audioPath
+    });
+
+    const metadata = (await readManifest(metadataPath)) || {};
+    const summary = buildRequestSummary({
+      kind: "sfx",
+      provider: ENDPOINT,
+      metadata: {
+        index: requestIndex,
+        sfx_kind: kind
+      },
+      requestId: result.requestId,
+      submittedAt: result.submittedAt,
+      prompt,
+      inputFiles: [],
+      outputFiles: [audioPath],
+      result: result.data
+    });
+
+    await writeJson(metadataPath, {
+      ...metadata,
+      ...summary
     });
   }
 
@@ -150,18 +172,18 @@ export async function generateSfx(options) {
 
   const manifest = {
     schema_version: 1,
-    provider: "fal-ai/elevenlabs",
-    endpoint: ENDPOINT,
     updated_at: new Date().toISOString(),
-    runs: [...(previous?.runs || []), run],
-    files: [...(previous?.files || []), ...files]
+    active_requests: previous?.active_requests || [],
+    last_request_indexes: requests.map((request) => request.index),
+    last_kind: kind,
+    last_prompt: prompt
   };
 
   if (manifestPath) await writeJson(manifestPath, manifest);
 
   return {
     ...run,
-    provider: "fal-ai/elevenlabs",
+    provider: ENDPOINT,
     endpoint: ENDPOINT,
     manifest_path: manifestPath
   };

@@ -43,7 +43,9 @@ worlds/
     project.json # minimal durable project metadata
     image.json   # merged literal scene/world analysis
     source/      # user-supplied input files (images, prompts, etc.)
-      <image>.json # per-image literal analysis beside the source image
+      0-<slug>.<ext> # original source image in an indexed family
+      1-<slug>.png   # derived plate/edit image in the same family
+      <image>.json   # per-image literal analysis beside the source image
     output/
       world/     # /image-blast-world output (world.json, operation.json)
       sfx/       # world-level ambience and arbitrary SFX
@@ -70,6 +72,8 @@ Skills are Claude Code skills per https://code.claude.com/docs/en/skills. Each s
 
 **`/image-blast-sfx [world-name]`** — Generates world ambience loops, object impact sounds, or arbitrary sound effects using the FAL ElevenLabs SFX endpoint. World and arbitrary SFX prefer `ambient_sound` from `image.json` and are saved under `worlds/<name>/output/sfx/`; object sounds use `object.json` and are saved under `worlds/<name>/output/<object-id>/sfx/`.
 
+**`/image-blast-plate [world-name]`** — Creates indexed plate/source cleanup images in `worlds/<name>/source/` by removing successfully generated 3D objects and optional user-specified content from the latest image in each source family.
+
 FAL API calls are implementation scripts under `.claude/scripts/asset-pipeline/` and `.claude/scripts/sfx/`, not standalone slash-command skills. The workflow skills document when and how Claude should call those scripts.
 
 **`input/` staging** — Drop images or other assets into `input/` (gitignored), then ask Claude what to do with them. `/image-blast-project` stages images into `worlds/<name>/source/` once the project name is confirmed.
@@ -89,12 +93,12 @@ The app must be highly modular with strict separation of concerns. Each system l
 Key behaviors:
 - **World list sidebar** (right column): reads `worlds/` at runtime, shows thumbnail + slug per world; clicking a world navigates to `/<world-name>`
 - **World loading**: a shared util handles all transitions — fade out current world (splat, audio, etc.), teleport character to origin, fade in new world using SparkJS reveal effects (https://sparkjs.dev/examples/#splat-reveal-effects)
-- **Per-world rendering**: splat via SparkJS, environment map from panorama `.png`, invisible physics collider from `.glb`, scene objects from `scene/scene.json`
+- **Per-world rendering**: splat via SparkJS, environment map from panorama `.png`, invisible physics collider from `.glb`, scene objects from `scene/project.json`
 - **Audio**: any audio files in `worlds/<name>/output/` loop in the background while that world is active
 - **Character controller**: use `@react-three/rapier` with a minimal out-of-the-box capsule controller. Mouse input must have motion smoothing applied. Touch input required for mobile.
 - **Post-processing**: motion blur (required), bloom (minimal/subtle), chromatic aberration (minimal/subtle). Each effect is its own module.
 - **Debug panel**: Leva panel (https://github.com/pmndrs/leva) exposes post-processing params, world load speed, etc.
-- **Scene editor**: The Three.js editor (https://github.com/mrdoob/three.js/tree/master/editor) is used as a standalone tool for inspecting and editing world scenes. It is not embedded in the React app — it runs separately and edits `scene/scene.json` directly.
+- **Scene editor**: The Three.js editor (https://github.com/mrdoob/three.js/tree/master/editor) is used as a standalone tool for inspecting and editing world scenes. It is not embedded in the React app — it runs separately and edits `scene/project.json` directly.
 
 ### Tests
 

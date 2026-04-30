@@ -10,6 +10,7 @@ import {
   toModelInputUrl,
   writeJson
 } from "./fal-queue.mjs";
+import { buildRequestSummary, requestPath } from "./request-metadata.mjs";
 
 const ENDPOINT = "fal-ai/nano-banana-2/edit";
 
@@ -24,7 +25,11 @@ export async function runNanoBananaEdit(options) {
     outputFormat = "png",
     safetyTolerance = "4",
     limitGenerations = true,
-    seed
+    seed,
+    metadataPath,
+    metadata = {},
+    onSubmit,
+    onStatus
   } = options;
 
   if (!prompt) throw new Error("Nano Banana prompt is required.");
@@ -50,32 +55,28 @@ export async function runNanoBananaEdit(options) {
   };
   if (seed !== undefined) input.seed = Number(seed);
 
-  await writeJson(path.join(outputDir, "nano-banana-input.json"), {
-    endpoint: ENDPOINT,
-    prompt,
-    images,
-    input: {
-      ...input,
-      image_urls: imageUrls.map((url) => (url.startsWith("data:") ? "[inline-data-uri]" : url))
-    }
-  });
-
   const result = await callFalQueue(ENDPOINT, input, {
-    outputDir,
-    prefix: "nano-banana"
+    metadataPath: metadataPath || requestPath(outputDir, 0, "nano-banana"),
+    metadata: { kind: "2d", provider: ENDPOINT, ...metadata },
+    onSubmit,
+    onStatus
   });
 
   const downloaded = await downloadRemoteFiles(result.data, outputDir, "nano-banana");
-  const summary = {
-    endpoint: ENDPOINT,
-    request_id: result.requestId,
+  const summary = buildRequestSummary({
+    kind: "2d",
+    provider: ENDPOINT,
+    metadata,
+    requestId: result.requestId,
+    submittedAt: result.submittedAt,
     prompt,
-    output_dir: outputDir,
-    downloaded_files: downloaded,
+    inputFiles: images,
+    outputFiles: downloaded.map((file) => file.path),
+    downloadedFiles: downloaded,
     result: result.data
-  };
+  });
 
-  await writeJson(path.join(outputDir, "nano-banana-files.json"), summary);
+  await writeJson(metadataPath || requestPath(outputDir, 0, "nano-banana"), summary);
   return summary;
 }
 

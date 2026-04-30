@@ -245,22 +245,44 @@ export async function downloadRemoteFiles(result, outputDir, prefix = "file") {
   return downloaded;
 }
 
-export async function callFalQueue(endpoint, input, options = {}) {
+export function sanitizeForMetadata(value) {
+  if (typeof value === "string") {
+    return isDataUri(value) ? "[inline-data-uri]" : value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeForMetadata(item));
+  }
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, child]) => [key, sanitizeForMetadata(child)])
+    );
+  }
+
+  return value;
+}
+
+async function updateMetadata(metadataPath, patch) {
+  if (!metadataPath) return;
+  const previous = (await pathExists(metadataPath)) ? await readJson(metadataPath) : {};
+  await writeJson(metadataPath, {
+    schema_version: 1,
+    ...previous,
+    ...patch,
+    updated_at: new Date().toISOString()
+  });
+}
+
+export async function submitFalQueue(endpoint, input, options = {}) {
   const {
-    outputDir,
-    prefix = "fal",
-    pollIntervalMs = 5000,
-    logs = true
+    metadataPath,
+    metadata = {},
+    onSubmit
   } = options;
 
   const falKey = await requireEnv("FAL_KEY");
-  if (outputDir) await ensureDir(outputDir);
-
-  const request = {
-    endpoint,
-    input,
-    submitted_at: new Date().toISOString()
-  };
+  const submittedAt = new Date().toISOString();
 
   const submitResponse = await fetch(`https://queue.fal.run/${endpoint}`, {
     method: "POST",
@@ -272,8 +294,6 @@ export async function callFalQueue(endpoint, input, options = {}) {
   });
 
   const submitBody = await submitResponse.json().catch(() => ({}));
-  request.submit_response = submitBody;
-  if (outputDir) await writeJson(path.join(outputDir, `${prefix}-request.json`), request);
 
   if (!submitResponse.ok) {
     throw new Error(`FAL submit failed (${submitResponse.status}): ${JSON.stringify(submitBody)}`);
@@ -284,28 +304,57 @@ export async function callFalQueue(endpoint, input, options = {}) {
     throw new Error(`FAL submit response did not include request_id: ${JSON.stringify(submitBody)}`);
   }
 
+  const submitted = {
+    ...metadata,
+    endpoint,
+    request_id: requestId,
+    status: "submitted",
+    submitted_at: submittedAt,
+    status_url: submitBody.status_url,
+    response_url: submitBody.response_url
+  };
+
+  await updateMetadata(metadataPath, submitted);
+  if (onSubmit) await onSubmit(submitted);
+
+  return submitted;
+}
+
+export async function pollFalQueue(endpoint, requestId, options = {}) {
+  const {
+    statusUrl: providedStatusUrl,
+    metadataPath,
+    pollIntervalMs = 5000,
+    logs = true,
+    onStatus
+  } = options;
+
+  const falKey = await requireEnv("FAL_KEY");
   let statusBody;
   while (true) {
-    const statusUrl = new URL(
-      submitBody.status_url || `https://queue.fal.run/${endpoint}/requests/${requestId}/status`
+    const requestStatusUrl = new URL(
+      providedStatusUrl || `https://queue.fal.run/${endpoint}/requests/${requestId}/status`
     );
-    if (logs) statusUrl.searchParams.set("logs", "1");
+    if (logs) requestStatusUrl.searchParams.set("logs", "1");
 
-    const statusResponse = await fetch(statusUrl, {
+    const statusResponse = await fetch(requestStatusUrl, {
       headers: { Authorization: `Key ${falKey}` }
     });
     statusBody = await statusResponse.json().catch(() => ({}));
 
-    if (outputDir) {
-      await writeJson(path.join(outputDir, `${prefix}-status.json`), {
-        checked_at: new Date().toISOString(),
-        status: statusBody
-      });
-    }
-
     if (!statusResponse.ok) {
       throw new Error(`FAL status failed (${statusResponse.status}): ${JSON.stringify(statusBody)}`);
     }
+
+    const statusPatch = {
+      endpoint,
+      request_id: requestId,
+      status: statusBody.status || "UNKNOWN",
+      checked_at: new Date().toISOString(),
+      queue_status: sanitizeForMetadata(statusBody)
+    };
+    await updateMetadata(metadataPath, statusPatch);
+    if (onStatus) await onStatus(statusPatch);
 
     if (statusBody.status === "COMPLETED") {
       if (statusBody.error) {
@@ -317,7 +366,21 @@ export async function callFalQueue(endpoint, input, options = {}) {
     await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
   }
 
-  const resultUrl = submitBody.response_url || `https://queue.fal.run/${endpoint}/requests/${requestId}`;
+  return {
+    endpoint,
+    request_id: requestId,
+    status: statusBody
+  };
+}
+
+export async function getFalQueueResult(endpoint, requestId, options = {}) {
+  const {
+    responseUrl,
+    metadataPath
+  } = options;
+
+  const falKey = await requireEnv("FAL_KEY");
+  const resultUrl = responseUrl || `https://queue.fal.run/${endpoint}/requests/${requestId}`;
   const resultResponse = await fetch(resultUrl, {
     headers: { Authorization: `Key ${falKey}` }
   });
@@ -326,18 +389,47 @@ export async function callFalQueue(endpoint, input, options = {}) {
     throw new Error(`FAL result failed (${resultResponse.status}): ${JSON.stringify(resultBody)}`);
   }
 
-  if (outputDir) {
-    await writeJson(path.join(outputDir, `${prefix}-result.json`), {
-      request_id: requestId,
-      completed_at: new Date().toISOString(),
-      status: statusBody,
-      result: resultBody
-    });
-  }
+  await updateMetadata(metadataPath, {
+    endpoint,
+    request_id: requestId,
+    status: "completed",
+    completed_at: new Date().toISOString(),
+    result: sanitizeForMetadata(resultBody)
+  });
 
   return {
     requestId,
-    status: statusBody,
     data: resultBody
+  };
+}
+
+export async function callFalQueue(endpoint, input, options = {}) {
+  const {
+    metadataPath,
+    metadata = {},
+    pollIntervalMs = 5000,
+    logs = true,
+    onSubmit,
+    onStatus
+  } = options;
+
+  const submitted = await submitFalQueue(endpoint, input, { metadataPath, metadata, onSubmit });
+  const status = await pollFalQueue(endpoint, submitted.request_id, {
+    statusUrl: submitted.status_url,
+    metadataPath,
+    pollIntervalMs,
+    logs,
+    onStatus
+  });
+  const result = await getFalQueueResult(endpoint, submitted.request_id, {
+    responseUrl: submitted.response_url,
+    metadataPath
+  });
+
+  return {
+    requestId: submitted.request_id,
+    submittedAt: submitted.submitted_at,
+    status: status.status,
+    data: result.data
   };
 }

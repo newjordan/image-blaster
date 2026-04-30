@@ -35,7 +35,7 @@ Use this exact flat shape for both `worlds/<slug>/source/<image-name>.json` and 
   "visual_style": "photorealistic, clinical, documentary",
   "lighting": "Even overhead fluorescent lighting, cool color temperature, low contrast, soft shadows.",
   "atmosphere": "Clean indoor air with no visible fog, smoke, dust, haze, or weather.",
-  "ambient_sound": "Minimal seamless loop: low ventilation hum and faint fluorescent buzz. No voices, music, impacts, or dramatic one-shot sounds.",
+  "ambient_sound": "Low ventilation hum with faint fluorescent buzz.",
   "objects": [
     {
       "id": "terracotta-amphora",
@@ -67,7 +67,7 @@ Use this exact flat shape for both `worlds/<slug>/source/<image-name>.json` and 
 - `visual_style`: concise visual/rendering labels only.
 - `lighting`: visible direction, softness, temperature, contrast, shadow quality, and time of day only when evident.
 - `atmosphere`: visible fog, dust, haze, smoke, glow, weather, particles, or explicitly state none visible.
-- `ambient_sound`: minimal looping ambience based on visible regular or periodic sound sources only. Include no voices, music, impacts, alarms, dramatic hits, or non-looping one-shots.
+- `ambient_sound`: concise positive description of audible ambience based on visible regular or sustained sound sources only. Describe only what should be present; do not include exclusions, negative prompts, or loop wording.
 - `objects`: persisted descriptive object candidates. These are fallback/debug data, not generation state.
 
 ## Merge Rules

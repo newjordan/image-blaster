@@ -1,0 +1,13 @@
+---
+description: Keep Image Blast state composable, colocated, and derived from generated files
+alwaysApply: true
+---
+
+# Image Blast Composition
+
+- Keep durable state near the asset it describes. Object state belongs under `worlds/<world>/output/<object>/`; world SFX state belongs under `worlds/<world>/output/sfx/`; source-image analysis belongs beside the source image.
+- Prefer deriving state by scanning directories, generated artifacts, and colocated hidden request JSON. Do not duplicate counts, stages, or completion status in central JSON when the files already prove it.
+- Keep central JSON minimal: identity, user-authored intent, and active resume pointers only.
+- For paid or long-running requests, persist request IDs before polling. Request metadata should be hidden, compact, sanitized, and named with the indexed convention `.N-slug-request.json`.
+- Align generated artifacts with request indexes so related files are easy to inspect together, such as `0-object.png`, `0-object.glb`, `.0-object__image-request.json`, and `.0-object__model-request.json`.
+- Read request semantics like `kind`, `role`, provider, and status from the JSON contents, not from filename suffixes.

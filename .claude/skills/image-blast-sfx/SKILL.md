@@ -60,11 +60,16 @@ node .claude/scripts/sfx/fal-elevenlabs-sfx.mjs \
 
 Add `--loop` only for looping sounds. Optional defaults are `--output-format mp3_44100_128` and `--prompt-influence 0.3`.
 
-6. The helper writes audio files plus `sfx.json` in the output directory. Do not hand-edit generated audio metadata unless correcting paths after a manual file move.
+6. The helper writes indexed audio files plus hidden compact request metadata in the output directory:
+   - audio files like `0-ambient-loop.mp3`, `0-impact-1.mp3`, or `1-impact-2.mp3`
+   - request metadata like `.0-ambient-loop-request.json`, `.1-impact-2-request.json`
+   - `sfx.json` only for minimal manifest/resume pointers when needed
+   Read request `kind` and `sfx_kind` from the metadata JSON, not from the filename.
+   Do not hand-edit generated audio metadata unless correcting paths after a manual file move.
 7. Report:
    - generated file paths
    - whether each sound loops
-   - manifest path
+   - hidden request metadata paths and manifest path, if present
    - prompt used
 
 ## Prompt Guidance

@@ -9,6 +9,7 @@ import {
   toModelInputUrl,
   writeJson
 } from "./fal-queue.mjs";
+import { buildRequestSummary, requestPath } from "./request-metadata.mjs";
 
 const ENDPOINT = "fal-ai/hunyuan-3d/v3.1/pro/image-to-3d";
 
@@ -19,7 +20,11 @@ export async function runHunyuan3D(options) {
     assetName,
     faceCount = 500000,
     enablePbr = true,
-    generateType = "Normal"
+    generateType = "Normal",
+    metadataPath,
+    metadata = {},
+    onSubmit,
+    onStatus
   } = options;
 
   if (!image) throw new Error("Input image is required.");
@@ -35,33 +40,29 @@ export async function runHunyuan3D(options) {
     face_count: Number(faceCount)
   };
 
-  await writeJson(path.join(outputDir, "hunyuan-3d-input.json"), {
-    endpoint: ENDPOINT,
-    asset_name: assetName,
-    image,
-    input: {
-      ...input,
-      input_image_url: inputImageUrl.startsWith("data:") ? "[inline-data-uri]" : inputImageUrl
-    }
-  });
-
   const result = await callFalQueue(ENDPOINT, input, {
-    outputDir,
-    prefix: "hunyuan-3d",
-    pollIntervalMs: 10000
+    metadataPath: metadataPath || requestPath(outputDir, 0, "hunyuan-3d"),
+    metadata: { kind: "3d", provider: ENDPOINT, ...metadata },
+    pollIntervalMs: 10000,
+    onSubmit,
+    onStatus
   });
 
   const downloaded = await downloadRemoteFiles(result.data, outputDir, "hunyuan-3d");
-  const summary = {
-    endpoint: ENDPOINT,
-    request_id: result.requestId,
-    asset_name: assetName,
-    output_dir: outputDir,
-    downloaded_files: downloaded,
-    result: result.data
-  };
+  const summary = buildRequestSummary({
+    kind: "3d",
+    provider: ENDPOINT,
+    metadata,
+    requestId: result.requestId,
+    submittedAt: result.submittedAt,
+    inputFiles: [image],
+    outputFiles: downloaded.map((file) => file.path),
+    downloadedFiles: downloaded,
+    result: result.data,
+    extra: { asset_name: assetName }
+  });
 
-  await writeJson(path.join(outputDir, "hunyuan-3d-files.json"), summary);
+  await writeJson(metadataPath || requestPath(outputDir, 0, "hunyuan-3d"), summary);
   return summary;
 }
 
