@@ -3,6 +3,7 @@ import { useControls, button, folder } from 'leva'
 import { useDebugStore } from '../store/debug'
 import { useButterflyStore } from '../modules/butterfly/store'
 import { LEVA_SCHEMA, DEFAULT_PARAMS, type ButterflyParams } from '../modules/butterfly/params'
+import { WorldRenderMode } from '../types/world'
 
 function dumpParams() {
   const debug = useDebugStore.getState()
@@ -25,7 +26,14 @@ function dumpParams() {
     motionBlurStrength: debug.motionBlurStrength,
   }
 
-  const out: Record<string, unknown> = { dof, post }
+  const lighting = {
+    environmentIntensity: debug.environmentIntensity,
+    sunIntensity: debug.sunIntensity,
+    sunColor: debug.sunColor,
+  }
+
+  const out: Record<string, unknown> = { dof, post, lighting }
+  out.worldRenderMode = debug.worldRenderMode
 
   if (debug.controllerMode === 'butterfly') {
     const bf = useButterflyStore.getState()
@@ -46,6 +54,8 @@ function dumpParams() {
 
 export function DebugPanel() {
   const setShowColliders = useDebugStore((s) => s.setShowColliders)
+  const worldRenderMode = useDebugStore((s) => s.worldRenderMode)
+  const setWorldRenderMode = useDebugStore((s) => s.setWorldRenderMode)
   const controllerMode = useDebugStore((s) => s.controllerMode)
   const setControllerMode = useDebugStore((s) => s.setControllerMode)
   const dofEnabled = useDebugStore((s) => s.dofEnabled)
@@ -61,6 +71,9 @@ export function DebugPanel() {
   const chromaticOffset = useDebugStore((s) => s.chromaticOffset)
   const motionBlurEnabled = useDebugStore((s) => s.motionBlurEnabled)
   const motionBlurStrength = useDebugStore((s) => s.motionBlurStrength)
+  const environmentIntensity = useDebugStore((s) => s.environmentIntensity)
+  const sunIntensity = useDebugStore((s) => s.sunIntensity)
+  const sunColor = useDebugStore((s) => s.sunColor)
   const setDofEnabled = useDebugStore((s) => s.setDofEnabled)
   const setFocalDistance = useDebugStore((s) => s.setFocalDistance)
   const setApertureAngle = useDebugStore((s) => s.setApertureAngle)
@@ -74,8 +87,21 @@ export function DebugPanel() {
   const setChromaticOffset = useDebugStore((s) => s.setChromaticOffset)
   const setMotionBlurEnabled = useDebugStore((s) => s.setMotionBlurEnabled)
   const setMotionBlurStrength = useDebugStore((s) => s.setMotionBlurStrength)
+  const setEnvironmentIntensity = useDebugStore((s) => s.setEnvironmentIntensity)
+  const setSunIntensity = useDebugStore((s) => s.setSunIntensity)
+  const setSunColor = useDebugStore((s) => s.setSunColor)
 
   useControls({
+    worldRenderMode: {
+      value: worldRenderMode,
+      options: {
+        'Splat Only': WorldRenderMode.SplatOnly,
+        'Object Only': WorldRenderMode.ObjectOnly,
+        Combined: WorldRenderMode.Combined,
+      },
+      label: 'World Render',
+      onChange: (v: WorldRenderMode) => setWorldRenderMode(v),
+    },
     'Dump Params (copy JSON)': button(dumpParams),
     'Splat DoF': folder({
       dofEnabled: {
@@ -171,6 +197,29 @@ export function DebugPanel() {
         step: 0.01,
         label: 'Motion Blur Str.',
         onChange: setMotionBlurStrength,
+      },
+    }),
+    Lighting: folder({
+      environmentIntensity: {
+        value: environmentIntensity,
+        min: 0,
+        max: 5,
+        step: 0.01,
+        label: 'Env Strength',
+        onChange: setEnvironmentIntensity,
+      },
+      sunIntensity: {
+        value: sunIntensity,
+        min: 0,
+        max: 10,
+        step: 0.01,
+        label: 'Sun Strength',
+        onChange: setSunIntensity,
+      },
+      sunColor: {
+        value: sunColor,
+        label: 'Sun Color',
+        onChange: setSunColor,
       },
     }),
     showColliders: {

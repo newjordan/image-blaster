@@ -33,7 +33,7 @@ export function App() {
         <Leva theme={{ sizes: { rootWidth: '380px', controlWidth: '180px' } }} />
       </div>
       <DebugPanel />
-      <WorldViewer world={entry.world} slug={entry.slug} />
+      <WorldViewer world={entry.world} slug={entry.slug} objectAssets={entry.objectAssets} />
       <BottomLeftControls worlds={worlds} activeSlug={entry.slug} />
       <TouchControls />
     </div>

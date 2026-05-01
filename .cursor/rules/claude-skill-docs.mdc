@@ -15,3 +15,4 @@ Follow the official Claude Code skills docs when editing `SKILL.md` files: https
 - `description` and `when_to_use` should front-load trigger phrases. Keep them clearer than the body.
 - Use `disable-model-invocation: true` for side-effecting skills that only the user should trigger.
 - Invoked skill content persists for the rest of the session, so keep standing guidance short and unambiguous.
+- Keep project rules high-level: shared conventions, routing, and ordering. Put skill-specific operational details in the relevant `.claude/skills/*/SKILL.md`.

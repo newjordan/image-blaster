@@ -7,12 +7,12 @@ import { WorldCollider } from '../modules/collider/WorldCollider'
 import { CharacterController, type CharacterControllerHandle } from '../modules/character/CharacterController'
 import { FlyController, type FlyControllerHandle } from '../modules/character/FlyController'
 import { ButterflyController, type ButterflyControllerHandle } from '../modules/butterfly/ButterflyController'
-import { SceneLoader } from '../modules/scene/SceneLoader'
+import { ObjectGrid } from '../modules/scene/ObjectGrid'
 import { AudioManager } from '../modules/audio/AudioManager'
 import { PostProcessing } from '../modules/postprocessing/PostProcessing'
 import { getSplatUrl } from '../utils/worldLoader'
 import { useDebugStore } from '../store/debug'
-import type { World } from '../types/world'
+import { WorldRenderMode, type World, type WorldObjectAsset } from '../types/world'
 
 const FADE_DURATION = 0.0
 const FADE_SPEED = FADE_DURATION > 0 ? 1 / FADE_DURATION : Infinity
@@ -42,7 +42,8 @@ interface TransitionDriverProps {
   revealRef: React.RefObject<number>
   pendingWorld: React.RefObject<World | null>
   pendingSlug: React.RefObject<string | null>
-  onSwap: (world: World, slug: string) => void
+  pendingObjectAssets: React.RefObject<WorldObjectAsset[] | null>
+  onSwap: (world: World, slug: string, objectAssets: WorldObjectAsset[]) => void
 }
 
 function TransitionDriver({
@@ -53,14 +54,14 @@ function TransitionDriver({
   revealRef,
   pendingWorld,
   pendingSlug,
+  pendingObjectAssets,
   onSwap,
 }: TransitionDriverProps) {
   useFrame((_, delta) => {
     const splat = splatRef.current
-    if (!splat) return
 
     const apply = (amount: number) => {
-      splat.setReveal(amount)
+      splat?.setReveal(amount)
       envRef.current?.setIntensity(amount)
     }
 
@@ -70,10 +71,12 @@ function TransitionDriver({
       if (revealRef.current <= 0 && pendingWorld.current && pendingSlug.current) {
         const w = pendingWorld.current
         const s = pendingSlug.current
+        const objectAssets = pendingObjectAssets.current ?? []
         pendingWorld.current = null
         pendingSlug.current = null
+        pendingObjectAssets.current = null
         charRef.current?.reset()
-        onSwap(w, s)
+        onSwap(w, s, objectAssets)
         phaseRef.current = 'in'
       }
     } else if (phaseRef.current === 'in') {
@@ -89,32 +92,42 @@ function TransitionDriver({
 interface Props {
   world: World
   slug: string
+  objectAssets: WorldObjectAsset[]
 }
 
-export function WorldViewer({ world: desiredWorld, slug: desiredSlug }: Props) {
+export function WorldViewer({ world: desiredWorld, slug: desiredSlug, objectAssets: desiredObjectAssets }: Props) {
   const [activeWorld, setActiveWorld] = useState(desiredWorld)
   const [activeSlug, setActiveSlug] = useState(desiredSlug)
+  const [activeObjectAssets, setActiveObjectAssets] = useState(desiredObjectAssets)
 
   const splatRef = useRef<SplatRendererHandle>(null)
   const envRef = useRef<EnvironmentMapHandle>(null)
   const charRef = useRef<CharHandle>(null)
+  const worldRenderMode = useDebugStore((s) => s.worldRenderMode)
   const controllerMode = useDebugStore((s) => s.controllerMode)
+  const environmentIntensity = useDebugStore((s) => s.environmentIntensity)
+  const sunIntensity = useDebugStore((s) => s.sunIntensity)
+  const sunColor = useDebugStore((s) => s.sunColor)
   const phaseRef = useRef<'idle' | 'out' | 'in'>('in')
   const revealRef = useRef(0)
   const pendingWorldRef = useRef<World | null>(null)
   const pendingSlugRef = useRef<string | null>(null)
+  const pendingObjectAssetsRef = useRef<WorldObjectAsset[] | null>(null)
 
   useEffect(() => {
     if (desiredSlug !== activeSlug) {
       pendingWorldRef.current = desiredWorld
       pendingSlugRef.current = desiredSlug
+      pendingObjectAssetsRef.current = desiredObjectAssets
       phaseRef.current = 'out'
     }
-  }, [desiredSlug, desiredWorld, activeSlug])
+  }, [desiredSlug, desiredWorld, desiredObjectAssets, activeSlug])
 
   const splatUrl = getSplatUrl(activeWorld)
   const { ground_plane_offset, flip_y, metric_scale_factor } = activeWorld.assets.splats.semantics_metadata
   const flipY = flip_y ?? true
+  const showSplat = worldRenderMode !== WorldRenderMode.ObjectOnly
+  const showObjects = worldRenderMode !== WorldRenderMode.SplatOnly
   return (
     <>
       <AudioManager slug={activeSlug} active />
@@ -132,9 +145,11 @@ export function WorldViewer({ world: desiredWorld, slug: desiredSlug }: Props) {
             revealRef={revealRef}
             pendingWorld={pendingWorldRef}
             pendingSlug={pendingSlugRef}
-            onSwap={(w, s) => {
+            pendingObjectAssets={pendingObjectAssetsRef}
+            onSwap={(w, s, objectAssets) => {
               setActiveWorld(w)
               setActiveSlug(s)
+              setActiveObjectAssets(objectAssets)
             }}
           />
           <Physics gravity={[0, -9.81, 0]}>
@@ -154,13 +169,18 @@ export function WorldViewer({ world: desiredWorld, slug: desiredSlug }: Props) {
             </Suspense>
             <SanityFloor />
           </Physics>
-          <SplatRenderer ref={splatRef} url={splatUrl} groundPlaneOffset={ground_plane_offset} flipY={flipY} metricScaleFactor={metric_scale_factor} />
+          {showSplat && splatUrl && (
+            <SplatRenderer ref={splatRef} url={splatUrl} groundPlaneOffset={ground_plane_offset} flipY={flipY} metricScaleFactor={metric_scale_factor} />
+          )}
+          <directionalLight color={sunColor} intensity={sunIntensity} position={[0, 10, 0]} />
           <Suspense fallback={null}>
-            <EnvironmentMap ref={envRef} panoUrl={activeWorld.assets.imagery.pano_url} />
+            <EnvironmentMap ref={envRef} panoUrl={activeWorld.assets.imagery.pano_url} intensity={environmentIntensity} />
           </Suspense>
-          <Suspense fallback={null}>
-            <SceneLoader slug={activeSlug} />
-          </Suspense>
+          {showObjects && (
+            <Suspense fallback={null}>
+              <ObjectGrid objects={activeObjectAssets} />
+            </Suspense>
+          )}
           <PostProcessing />
         </Suspense>
       </Canvas>

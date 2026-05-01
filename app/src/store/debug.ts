@@ -1,11 +1,14 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { WorldRenderMode } from '../types/world'
 
 export type ControllerMode = 'fly' | 'fps' | 'butterfly'
 
 interface DebugStore {
   showColliders: boolean
   setShowColliders: (v: boolean) => void
+  worldRenderMode: WorldRenderMode
+  setWorldRenderMode: (v: WorldRenderMode) => void
   controllerMode: ControllerMode
   setControllerMode: (v: ControllerMode) => void
   // Splat depth-of-field (Spark 2.0 built-in DoF + circle-bokeh via flat falloff)
@@ -37,6 +40,13 @@ interface DebugStore {
   setMotionBlurEnabled: (v: boolean) => void
   motionBlurStrength: number
   setMotionBlurStrength: (v: number) => void
+  // Lighting
+  environmentIntensity: number
+  setEnvironmentIntensity: (v: number) => void
+  sunIntensity: number
+  setSunIntensity: (v: number) => void
+  sunColor: string
+  setSunColor: (v: string) => void
 }
 
 export const useDebugStore = create<DebugStore>()(
@@ -44,6 +54,8 @@ export const useDebugStore = create<DebugStore>()(
     (set) => ({
       showColliders: false,
       setShowColliders: (showColliders) => set({ showColliders }),
+      worldRenderMode: WorldRenderMode.Combined,
+      setWorldRenderMode: (worldRenderMode) => set({ worldRenderMode }),
       controllerMode: 'fps',
       setControllerMode: (controllerMode) => set({ controllerMode }),
       dofEnabled: true,
@@ -72,6 +84,12 @@ export const useDebugStore = create<DebugStore>()(
       setMotionBlurEnabled: (motionBlurEnabled) => set({ motionBlurEnabled }),
       motionBlurStrength: 0.3,
       setMotionBlurStrength: (motionBlurStrength) => set({ motionBlurStrength }),
+      environmentIntensity: 1,
+      setEnvironmentIntensity: (environmentIntensity) => set({ environmentIntensity }),
+      sunIntensity: 1,
+      setSunIntensity: (sunIntensity) => set({ sunIntensity }),
+      sunColor: '#ffffff',
+      setSunColor: (sunColor) => set({ sunColor }),
     }),
     {
       name: 'image-blaster-debug',
@@ -80,6 +98,7 @@ export const useDebugStore = create<DebugStore>()(
       // values are always meant to start fresh from the defaults declared above.
       partialize: (s) => ({
         showColliders: s.showColliders,
+        worldRenderMode: s.worldRenderMode,
         controllerMode: s.controllerMode,
       }),
     },

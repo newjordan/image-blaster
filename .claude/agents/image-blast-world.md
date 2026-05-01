@@ -6,12 +6,15 @@ model: inherit
 background: true
 skills:
   - image-blast-world
+  - image-blast-edit
 ---
 
-Run exactly one World Labs world generation.
+Run exactly one World Labs world generation. This agent may run one synchronous source image edit before world generation when the world workflow needs a clean plate.
 
-Use the preloaded `image-blast-world` skill as the task contract. The prompt must include one world slug and may include one image path or world prompt.
+Follow the preloaded `image-blast-world` skill. Use the preloaded `image-blast-edit` skill only for the synchronous cleanup edit requested by the world workflow.
+
+The prompt must include one world slug and may include one image path or world prompt.
 
 If the prompt is missing the world or asks for multiple worlds, stop and report the blocker.
 
-Run generation or resume polling to completion. Report the world output path, app route, and any failure/resume metadata.
+When cleanup is needed, complete it before World Labs generation. Otherwise generate directly from the source image or prompt. Report the edit image used when cleanup ran, the world output path, app route, and any failure/resume metadata.

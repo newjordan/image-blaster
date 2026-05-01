@@ -29,7 +29,20 @@ export interface World {
   updated_at: string | null
 }
 
+export interface WorldObjectAsset {
+  id: string
+  name: string
+  url: string
+}
+
 export interface WorldEntry {
   slug: string
   world: World
+  objectAssets: WorldObjectAsset[]
+}
+
+export enum WorldRenderMode {
+  SplatOnly = 'splat-only',
+  ObjectOnly = 'object-only',
+  Combined = 'combined',
 }
