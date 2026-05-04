@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, type RefObject } from 'react'
 import { ThreeEvent, useThree } from '@react-three/fiber'
-import { type RapierRigidBody, useBeforePhysicsStep, useRapier } from '@react-three/rapier'
+import { type RapierRigidBody, useAfterPhysicsStep, useBeforePhysicsStep, useRapier } from '@react-three/rapier'
 import * as THREE from 'three'
 import { markObjectInteraction } from '../interaction/pointerGuards'
 import type { SceneObjectHandle } from './SceneObject'
 
-const RELEASE_SPEED_LIMIT = 18
+const GRAB_LINEAR_SPEED_LIMIT = 5 
+const GRAB_ANGULAR_SPEED_LIMIT = 10
 
 type ObjectRefMap = Map<string, RefObject<SceneObjectHandle | null>>
 
@@ -31,6 +32,8 @@ const _bodyPosition = new THREE.Vector3()
 const _bodyRotation = new THREE.Quaternion()
 const _inverseBodyRotation = new THREE.Quaternion()
 const _localAnchor = new THREE.Vector3()
+const _bodyLinearVelocity = new THREE.Vector3()
+const _bodyAngularVelocity = new THREE.Vector3()
 const _zeroVector = { x: 0, y: 0, z: 0 }
 
 function vectorLike(vector: THREE.Vector3) {
@@ -60,6 +63,22 @@ function computeLocalAnchor(body: RapierRigidBody, worldPoint: THREE.Vector3) {
   return _localAnchor.copy(worldPoint).sub(_bodyPosition).applyQuaternion(_inverseBodyRotation).clone()
 }
 
+function clampBodyVelocity(body: RapierRigidBody) {
+  const linear = body.linvel()
+  _bodyLinearVelocity.set(linear.x, linear.y, linear.z)
+  if (_bodyLinearVelocity.length() > GRAB_LINEAR_SPEED_LIMIT) {
+    _bodyLinearVelocity.setLength(GRAB_LINEAR_SPEED_LIMIT)
+    body.setLinvel(vectorLike(_bodyLinearVelocity), true)
+  }
+
+  const angular = body.angvel()
+  _bodyAngularVelocity.set(angular.x, angular.y, angular.z)
+  if (_bodyAngularVelocity.length() > GRAB_ANGULAR_SPEED_LIMIT) {
+    _bodyAngularVelocity.setLength(GRAB_ANGULAR_SPEED_LIMIT)
+    body.setAngvel(vectorLike(_bodyAngularVelocity), true)
+  }
+}
+
 export function useObjectGrab({ anchorRef, objectRefs }: UseObjectGrabArgs) {
   const { camera, gl } = useThree()
   const { rapier, world } = useRapier()
@@ -84,10 +103,11 @@ export function useObjectGrab({ anchorRef, objectRefs }: UseObjectGrabArgs) {
     }
 
     const releaseVelocity = activeGrab.releaseVelocity.clone()
-    if (releaseVelocity.length() > RELEASE_SPEED_LIMIT) {
-      releaseVelocity.setLength(RELEASE_SPEED_LIMIT)
+    if (releaseVelocity.length() > GRAB_LINEAR_SPEED_LIMIT) {
+      releaseVelocity.setLength(GRAB_LINEAR_SPEED_LIMIT)
     }
     activeGrab.body.setLinvel(vectorLike(releaseVelocity), true)
+    clampBodyVelocity(activeGrab.body)
     activeGrab.body.wakeUp()
 
     if (gl.domElement.hasPointerCapture(activeGrab.pointerId)) {
@@ -112,6 +132,7 @@ export function useObjectGrab({ anchorRef, objectRefs }: UseObjectGrabArgs) {
 
       anchor.setTranslation(vectorLike(worldPoint), true)
       anchor.setNextKinematicTranslation(vectorLike(worldPoint))
+      clampBodyVelocity(body)
       body.wakeUp()
 
       const bodyAnchor = computeLocalAnchor(body, worldPoint)
@@ -178,8 +199,18 @@ export function useObjectGrab({ anchorRef, objectRefs }: UseObjectGrabArgs) {
     updatePointerTarget(activeGrab)
     const dt = physicsWorld.timestep || 1 / 60
     activeGrab.releaseVelocity.copy(activeGrab.target).sub(activeGrab.previousTarget).divideScalar(dt)
+    if (activeGrab.releaseVelocity.length() > GRAB_LINEAR_SPEED_LIMIT) {
+      activeGrab.releaseVelocity.setLength(GRAB_LINEAR_SPEED_LIMIT)
+    }
     activeGrab.previousTarget.copy(activeGrab.target)
     anchor.setNextKinematicTranslation(vectorLike(activeGrab.target))
+    clampBodyVelocity(activeGrab.body)
+  })
+
+  useAfterPhysicsStep(() => {
+    const activeGrab = activeGrabRef.current
+    if (!activeGrab) return
+    clampBodyVelocity(activeGrab.body)
   })
 
   useEffect(() => {

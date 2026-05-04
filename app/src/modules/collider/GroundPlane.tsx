@@ -8,6 +8,7 @@ import { SHADED_COLOR } from '../scene/useAssetMaterials'
 const LARGE = 200
 const GRID_SIZE = 5
 const GRID_DIVS = 5
+const FLOOR_THICKNESS = 0.05
 
 export function GroundPlane() {
   const objectRenderMode = useDebugStore((s) => s.objectRenderMode)
@@ -73,11 +74,12 @@ export function GroundPlane() {
             </mesh>
           )}
 
-          <RigidBody type="fixed">
-            <CuboidCollider args={[GRID_SIZE / 2, 0.05, GRID_SIZE / 2]} position={[0, -0.05, 0]} />
-          </RigidBody>
         </>
       )}
+
+      <RigidBody type="fixed">
+        <CuboidCollider args={[LARGE / 2, FLOOR_THICKNESS, LARGE / 2]} position={[0, -FLOOR_THICKNESS, 0]} />
+      </RigidBody>
 
       {/* physics safety net */}
       <RigidBody type="fixed" position={[0, -10, 0]}>

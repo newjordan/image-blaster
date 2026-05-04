@@ -7,7 +7,7 @@ export type ControllerMode = 'fly' | 'fps' | 'butterfly'
 function defaultViewerQuality() {
   if (typeof window === 'undefined') return ViewerQuality.High
   const mobileQuery = '(hover: none), (pointer: coarse), (max-width: 767px)'
-  return window.matchMedia(mobileQuery).matches ? ViewerQuality.Low : ViewerQuality.High
+  return window.matchMedia(mobileQuery).matches ? ViewerQuality.Medium : ViewerQuality.High
 }
 
 interface DebugStore {

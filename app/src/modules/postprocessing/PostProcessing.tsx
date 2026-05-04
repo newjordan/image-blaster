@@ -1,4 +1,4 @@
-import { useEffect, useMemo, type ReactElement } from 'react'
+import { useEffect, useMemo } from 'react'
 import { EffectComposer } from '@react-three/postprocessing'
 import { BlendFunction, BloomEffect, ChromaticAberrationEffect } from 'postprocessing'
 import { useThree, useFrame } from '@react-three/fiber'
@@ -8,6 +8,10 @@ import { useDebugStore } from '../../store/debug'
 
 const _prevQuat = new THREE.Quaternion()
 const _delta = new THREE.Quaternion()
+
+function OptionalEffect({ enabled, object }: { enabled: boolean; object: object }) {
+  return enabled ? <primitive object={object} /> : null
+}
 
 // Why we instantiate effects directly instead of using <Bloom>/<ChromaticAberration>:
 // @react-three/postprocessing's wrapEffect uses `useMemo(..., [JSON.stringify(a)])`
@@ -72,15 +76,20 @@ export function PostProcessing() {
     _prevQuat.copy(camera.quaternion)
   })
 
-  // EffectComposer's children type doesn't accept null, so build an array.
-  const effects: ReactElement[] = []
-  if (bloomEnabled) effects.push(<primitive key="bloom" object={bloomEffect} />)
-  if (chromaticEnabled) effects.push(<primitive key="chroma" object={chromaEffect} />)
-  if (motionBlurEnabled) effects.push(<primitive key="blur" object={blurEffect} />)
+  const hasEffects = bloomEnabled || chromaticEnabled || motionBlurEnabled
+  if (!hasEffects) return null
 
-  // EffectComposer needs at least one effect; if everything is off, skip it
-  // entirely so the scene renders straight through.
-  if (effects.length === 0) return null
+  const effectKey = [
+    bloomEnabled ? 'bloom' : '',
+    chromaticEnabled ? 'chroma' : '',
+    motionBlurEnabled ? 'blur' : '',
+  ].join('|')
 
-  return <EffectComposer>{effects}</EffectComposer>
+  return (
+    <EffectComposer key={effectKey}>
+      <OptionalEffect enabled={bloomEnabled} object={bloomEffect} />
+      <OptionalEffect enabled={chromaticEnabled} object={chromaEffect} />
+      <OptionalEffect enabled={motionBlurEnabled} object={blurEffect} />
+    </EffectComposer>
+  )
 }

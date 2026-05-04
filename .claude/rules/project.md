@@ -73,7 +73,7 @@ When doing an IMAGE-BLAST, it can be done in one-shot by following this order:
 5. Create a world with `Agent(image-blast-world)` from the newest source image, which may be the generated plate.
 6. Launch one 3D object agent per confirmed object to create 3D models
 7. Launch SFX agents for ambience and also for every object to create object-specific sounds.
-8. Once all assets are complete, run `bun install && bun run dev` from the repository root and tell the user to open http://localhost:5173 in their browser.
+8. Once all assets are complete, run `bun install && bun run dev` from the repository root, open http://localhost:5173 for the user when possible, and report the URL.
 
 Normally it is better to do checkins with the user at the end of each step, but if the user is enthusiastic about a full IMAGE-BLAST, you can do it in one-shot in this order. 
 
