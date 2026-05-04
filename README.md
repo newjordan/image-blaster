@@ -10,15 +10,15 @@
         '.       .'
           '-....-'
 ```
-
-`image-blaster` is a `claude code` that can create 3D/2D/SFX/video assets from images.
+## `image-blaster`
+A Claude Code project that creates a 3D environment, SFX, and meshes from a single image.
 
 ## Quickstart
 
 1. Open a Terminal, enter `git clone https://github.com/neilsonnn/image-blaster`
 2. Enter the directory with `cd image-blaster`
-3. Run `claude` (install with `curl -fsSL https://claude.ai/install.sh | bash`)
-4. Say hello to Claude, and give them your API key for World Labs and FAL
+3. Run `claude` (install with [`curl -fsSL https://claude.ai/install.sh | bash`](https://code.claude.com/docs/en/quickstart))
+4. Say hello to Claude, and give them your API key for [World Labs](https://platform.worldlabs.ai/) and [FAL](https://fal.ai/).
 5. Put an image into `input/` and ask Claude to `IMAGE-BLAST` it.
 
 ## Description
@@ -26,7 +26,7 @@
 By default `image-blaster` will use your input image to create:
 
 1. 3D models (`.glb`, `.obj`) of all *dynamic* objects
-2. A gaussian splat (`.spz`) of the *static* environment,
+2. Gaussian splat (`.spz`) of the *static* environment,
 3. Ambient looping sound and object specific physics SFX (`.mp3`)
 
 ## Extensions
