@@ -47,6 +47,17 @@ N-slug.ext
 
 - Every generation request (3D, world, SFX, image editing, etc.) must use Agent with `run_in_background: true` instead of parallel Skill calls, even if it's a single request so they are non-blocking.
 
+## Showing User Folders
+
+When the user needs to add images to `input/` or inspect a project folder, open the folder for them and also report the absolute path. Use the cross-platform helper instead of calling `open`, `explorer`, or `xdg-open` directly:
+
+```bash
+node .claude/scripts/project/show-folder.mjs input
+node .claude/scripts/project/show-folder.mjs worlds/<world-slug>
+```
+
+The helper prints a fallback command for CLI-only environments. It delegates to the OS file manager and may reuse an existing window when the platform does so by default.
+
 ## Generation Scripts Are Synchronous
 
 All generation scripts (`generate-edit.mjs`, `generate-world.mjs`, `generate-single-asset.mjs`, `fal-elevenlabs-sfx.mjs`, etc.) block until the API call completes and print their result to stdout. **Never** run them with `run_in_background: true` or use `tail -f` to monitor their output — just run them directly and read the printed result.

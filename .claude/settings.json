@@ -3,6 +3,7 @@
     "allow": [
       "Bash(ls:*)",
       "Bash(node .claude/scripts/project/project-state.mjs:*)",
+      "Bash(node .claude/scripts/project/show-folder.mjs:*)",
       "Bash(node .claude/scripts/image-edit/generate-edit.mjs:*)",
       "Bash(node .claude/scripts/world/generate-world.mjs:*)",
       "Bash(node .claude/scripts/asset-pipeline/generate-single-asset.mjs:*)",

@@ -2,7 +2,7 @@
 name: image-blast-uncover
 description: Deeply analyze source images into literal scene and object descriptions. Use when the user wants image understanding, scene captions, atmosphere, source image JSON files, object directories, or 3D object candidates.
 argument-hint: [world-name] [optional image paths or instructions]
-allowed-tools: Read Write Glob Bash(ls *) Bash(node .claude/scripts/project/project-state.mjs *)
+allowed-tools: Read Write Glob Bash(ls *) Bash(node .claude/scripts/project/project-state.mjs *) Bash(node .claude/scripts/project/show-folder.mjs *)
 ---
 
 Uncover literal image information for project `$0`. Additional image paths or instructions may appear in `$ARGUMENTS`.
@@ -16,6 +16,12 @@ Follow the generic file convention in `.claude/rules/project.md`. Use `ls -a` to
 
 ```bash
 node .claude/scripts/project/project-state.mjs --world "$0" --stage-input
+```
+
+If no source images exist after staging and the user needs to add images, open the staging folder before asking them to drop files there:
+
+```bash
+node .claude/scripts/project/show-folder.mjs input
 ```
 
 3. Read `IMAGE-BLAST.md` in this skill directory and follow its JSON contract exactly.
