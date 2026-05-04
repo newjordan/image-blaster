@@ -34,18 +34,18 @@ export function App() {
   const entry = worlds.find((w) => w.slug === slug) ?? worlds[0]
 
   return (
-    <div className="relative w-screen h-screen bg-black overflow-hidden">
+    <div className="relative w-screen h-screen bg-black overflow-hidden select-none">
       {LevaPanel && DebugPanel && (
         <Suspense fallback={null}>
           <LevaPanel theme={{ sizes: { rootWidth: '380px', controlWidth: '180px' } }} />
           <DebugPanel />
         </Suspense>
       )}
-      <WorldViewer world={entry.world} slug={entry.slug} objectAssets={entry.objectAssets} sourceImageUrl={entry.sourceImageUrl} />
-      <div className="fixed left-4 top-4 z-10">
+      <WorldViewer world={entry.world} slug={entry.slug} objectAssets={entry.objectAssets} />
+      <div className="fixed inset-x-4 top-4 z-10 sm:left-4 sm:right-auto">
         <WorldSidebar worlds={worlds} activeSlug={entry.slug} />
       </div>
-      <div className="fixed bottom-4 left-4 z-20">
+      <div className="fixed inset-x-0 bottom-4 z-20 flex justify-center px-4 sm:left-4 sm:right-auto sm:justify-start sm:px-0">
         <BottomLeftControls />
       </div>
       <TouchControls />

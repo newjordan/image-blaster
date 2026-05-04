@@ -5,7 +5,7 @@ import {
   SpeakerHigh,
   SpeakerSlash,
   GlobeHemisphereEast,
-  ParkIcon,
+  CameraIcon,
 } from '@phosphor-icons/react'
 import { Tooltip } from '@radix-ui/themes'
 import { type ReactElement, useEffect } from 'react'
@@ -77,27 +77,25 @@ export function BottomLeftControls() {
   }, [setObjectRenderMode, setWorldRenderMode, setViewerQuality])
 
   const utilBtn =
-    'w-10 h-10 justify-center text-white'
+    'w-8 h-8 justify-center text-white'
 
   const modeBtn = (active: boolean) =>
-    `w-10 h-10 justify-center ${
+    `w-8 h-8 justify-center ${
       active ? 'bg-white/15 text-white' : 'text-white'
     }`
-  const pillBtn =
-    'w-24 h-10 gap-1.5 text-white text-xs font-medium'
 
   const currentQuality = QUALITY_MODES.find((item) => item.mode === viewerQuality) ?? QUALITY_MODES[0]
   const currentWorldMode = WORLD_MODES.find((item) => item.mode === worldRenderMode) ?? WORLD_MODES[0]
 
   return (
-    <div className="flex items-center gap-1.5 rounded-xl px-1 bg-black/55 backdrop-blur-md">
+    <div className="flex w-full items-center justify-center gap-1 h-10 rounded-xl px-2 bg-black/55 backdrop-blur-md sm:w-auto">
       {/* utility */}
       <ControlTooltip content={muted ? 'Unmute' : 'Mute'}>
         <AppButton onClick={toggleMuted} className={utilBtn}>
           {muted ? <SpeakerSlash size={18} weight="fill" /> : <SpeakerHigh size={18} weight="fill" />}
         </AppButton>
       </ControlTooltip>
-      <ControlTooltip content="Reset objects">
+      <ControlTooltip content="Reset">
         <AppButton onClick={resetObjects} className={utilBtn}>
           <ArrowCounterClockwise size={18} weight="bold" />
         </AppButton>
@@ -105,21 +103,21 @@ export function BottomLeftControls() {
 
       <div className="w-px h-6 bg-white/15 mx-1" />
 
-      {/* viewer quality */}
-      <ControlTooltip content="Cycle quality">
+      {/* world render mode */}
+      <ControlTooltip content="Cycle world render mode">
         <AppButton
-          onClick={() => setViewerQuality(nextMode(QUALITY_MODES, viewerQuality))}
-          className={pillBtn}
+          onClick={() => setWorldRenderMode(nextMode(WORLD_MODES, worldRenderMode))}
+          className={'w-24'}
         >
-          <ParkIcon size={15} weight="regular" className="text-white/45 flex-shrink-0" />
-          <span>{currentQuality.label}</span>
+          <GlobeSimple size={15} weight="regular" className="text-white/45 flex-shrink-0" />
+          <span>{currentWorldMode.label}</span>
         </AppButton>
       </ControlTooltip>
 
       <div className="w-px h-6 bg-white/15 mx-1" />
 
       {/* object render mode */}
-      <div className="flex items-center gap-1 rounded-2xl bg-white/5 p-1">
+      <div className="flex items-center gap-1">
         {OBJECT_MODES.map(({ mode, Icon, label }) => (
           <ControlTooltip key={mode} content={label}>
             <AppButton
@@ -135,14 +133,14 @@ export function BottomLeftControls() {
 
       <div className="w-px h-6 bg-white/15 mx-1" />
 
-      {/* world render mode */}
-      <ControlTooltip content="Cycle world render mode">
+      {/* viewer quality */}
+      <ControlTooltip content="Cycle quality">
         <AppButton
-          onClick={() => setWorldRenderMode(nextMode(WORLD_MODES, worldRenderMode))}
-          className={pillBtn}
+          onClick={() => setViewerQuality(nextMode(QUALITY_MODES, viewerQuality))}
+          className={'w-20'}
         >
-          <GlobeSimple size={15} weight="regular" className="text-white/45 flex-shrink-0" />
-          <span>{currentWorldMode.label}</span>
+          <CameraIcon size={15} weight="regular" className="text-white/45 flex-shrink-0" />
+          <span>{currentQuality.label}</span>
         </AppButton>
       </ControlTooltip>
     </div>

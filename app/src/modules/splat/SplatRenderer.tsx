@@ -1,7 +1,8 @@
-import { useMemo, useRef, forwardRef, useImperativeHandle, useEffect } from 'react'
+import { useMemo, useRef, useEffect } from 'react'
 import { extend, useThree, useFrame } from '@react-three/fiber'
 import { SplatMesh, SparkRenderer, dyno } from '@sparkjsdev/spark'
 import { useDebugStore } from '../../store/debug'
+import { ViewerQuality } from '../../types/world'
 
 // Patch Spark's default vertex shader to swap the linear thin-lens CoC formula
 // for a configurable curve: zero blur within `sharpRange` of the focal plane,
@@ -23,15 +24,6 @@ const DEFAULT_FALLOFF_RATE = 0.3
 const SparkRendererEl = extend(SparkRenderer)
 const SplatMeshEl = extend(SplatMesh)
 
-// Vertical fade window as a fraction of the reveal timeline.
-// 1.0 means the bottom-most splat finishes fading exactly as the top-most starts;
-// values <1 give more overlap, >1 give a sharper top-to-bottom sweep.
-const FADE_WINDOW = 0.6
-
-export interface SplatRendererHandle {
-  setReveal: (amount: number) => void
-}
-
 interface Props {
   url: string
   visible?: boolean
@@ -40,35 +32,18 @@ interface Props {
   metricScaleFactor?: number
 }
 
-function makeRevealModifier(initialVisible = true) {
-  const revealFloat = dyno.dynoFloat(1)
+function makeVisibilityModifier(initialVisible = true) {
   const visibleFloat = dyno.dynoFloat(initialVisible ? 1 : 0)
-  const yMinFloat = dyno.dynoFloat(-1)
-  const yMaxFloat = dyno.dynoFloat(1)
-  const windowFloat = dyno.dynoFloat(FADE_WINDOW)
   const modifierDyno = dyno.dyno({
     inTypes: {
       gsplat: dyno.Gsplat,
-      reveal: 'float' as const,
       visible: 'float' as const,
-      yMin: 'float' as const,
-      yMax: 'float' as const,
-      win: 'float' as const,
     },
     outTypes: { gsplat: dyno.Gsplat },
-    inputs: { reveal: revealFloat, visible: visibleFloat, yMin: yMinFloat, yMax: yMaxFloat, win: windowFloat },
+    inputs: { visible: visibleFloat },
     statements: ({ inputs, outputs }) => [
       `${outputs.gsplat} = ${inputs.gsplat};`,
-      // Local center.y maps to world via a Math.PI X-rotation in the parent group,
-      // so larger local Y = lower in world. We want lower-world splats to fade in
-      // first, i.e. high-local-Y first. n=0 at low local-Y (top of world),
-      // n=1 at high local-Y (bottom of world).
-      `float yRange = max(1e-4, ${inputs.yMax} - ${inputs.yMin});`,
-      `float n = clamp((${inputs.gsplat}.center.y - ${inputs.yMin}) / yRange, 0.0, 1.0);`,
-      `float scaledReveal = ${inputs.reveal} * (1.0 + ${inputs.win});`,
-      `float threshold = (1.0 - n) * ${inputs.win};`,
-      `float a = clamp(scaledReveal - threshold, 0.0, 1.0);`,
-      `${outputs.gsplat}.rgba.a *= a * ${inputs.visible};`,
+      `${outputs.gsplat}.rgba.a *= ${inputs.visible};`,
     ],
   })
   const modifier = dyno.dynoBlock(
@@ -76,17 +51,22 @@ function makeRevealModifier(initialVisible = true) {
     { gsplat: dyno.Gsplat },
     ({ gsplat }) => ({ gsplat: modifierDyno.apply({ gsplat }).gsplat }),
   )
-  return { revealFloat, visibleFloat, yMinFloat, yMaxFloat, modifier }
+  return { visibleFloat, modifier }
 }
 
 
-export const SplatRenderer = forwardRef<SplatRendererHandle, Props>(
-  ({ url, visible = true, groundPlaneOffset = 0, flipY, metricScaleFactor = 1 }, ref) => {
+export function SplatRenderer({
+  url,
+  visible = true,
+  groundPlaneOffset = 0,
+  flipY,
+  metricScaleFactor = 1,
+}: Props) {
     const renderer = useThree((state) => state.gl)
     const splatRef = useRef<SplatMesh>(null)
     const sparkRef = useRef<SparkRenderer>(null)
     
-    const { revealFloat, visibleFloat, yMinFloat, yMaxFloat, modifier } = useRef(makeRevealModifier(visible)).current
+    const { visibleFloat, modifier } = useRef(makeVisibilityModifier(visible)).current
 
     useEffect(() => {
       visibleFloat.value = visible ? 1 : 0
@@ -117,7 +97,7 @@ export const SplatRenderer = forwardRef<SplatRendererHandle, Props>(
       const s = useDebugStore.getState()
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const u = spark.material.uniforms as any
-      if (s.dofEnabled) {
+      if (s.viewerQuality === ViewerQuality.High && s.dofEnabled) {
         spark.focalDistance = s.focalDistance
         spark.apertureAngle = s.apertureAngle
         spark.falloff = s.falloff
@@ -130,33 +110,13 @@ export const SplatRenderer = forwardRef<SplatRendererHandle, Props>(
       }
     })
 
-    useImperativeHandle(ref, () => ({
-      setReveal: (amount: number) => {
-        revealFloat.value = amount
-        splatRef.current?.updateVersion()
-      },
-    }))
-
-    const sparkArgs = useMemo(() => ({ renderer }), [renderer]) //, maxPixelRadius: 1 
+    const sparkArgs = useMemo(() => ({ renderer }), [renderer])
     const splatArgs = useMemo(
       () => ({
         url,
         objectModifier: modifier,
-        onLoad: (mesh: SplatMesh) => {
-          let box: ReturnType<SplatMesh['getBoundingBox']>
-          try {
-            box = mesh.getBoundingBox(true)
-          } catch (error) {
-            console.warn('Could not compute splat reveal bounds.', error)
-            return
-          }
-          if (box.isEmpty()) return
-          yMinFloat.value = box.min.y
-          yMaxFloat.value = box.max.y
-          mesh.updateVersion()
-        },
       }),
-      // modifier/yMin/yMax are stable — only url triggers a new SplatMesh
+      // modifier is stable; only url triggers a new SplatMesh
       // eslint-disable-next-line react-hooks/exhaustive-deps
       [url],
     )
@@ -168,5 +128,4 @@ export const SplatRenderer = forwardRef<SplatRendererHandle, Props>(
         </group>
       </SparkRendererEl>
     )
-  },
-)
+}

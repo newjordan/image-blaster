@@ -24,6 +24,8 @@ interface DebugStore {
   setShowOrigin: (v: boolean) => void
   controllerMode: ControllerMode
   setControllerMode: (v: ControllerMode) => void
+  flyMouseSensitivity: number
+  setFlyMouseSensitivity: (v: number) => void
   // Splat depth-of-field (Spark 2.0 built-in DoF + circle-bokeh via flat falloff)
   dofEnabled: boolean
   setDofEnabled: (v: boolean) => void
@@ -81,6 +83,8 @@ export const useDebugStore = create<DebugStore>()(
       setShowOrigin: (showOrigin) => set({ showOrigin }),
       controllerMode: 'fly',
       setControllerMode: (controllerMode) => set({ controllerMode }),
+      flyMouseSensitivity: 0.003,
+      setFlyMouseSensitivity: (flyMouseSensitivity) => set({ flyMouseSensitivity }),
       dofEnabled: true,
       setDofEnabled: (dofEnabled) => set({ dofEnabled }),
       focalDistance: 5,
@@ -107,7 +111,7 @@ export const useDebugStore = create<DebugStore>()(
       setMotionBlurEnabled: (motionBlurEnabled) => set({ motionBlurEnabled }),
       motionBlurStrength: 0.3,
       setMotionBlurStrength: (motionBlurStrength) => set({ motionBlurStrength }),
-      environmentIntensity: 1,
+      environmentIntensity: 2,
       setEnvironmentIntensity: (environmentIntensity) => set({ environmentIntensity }),
       sunIntensity: 1,
       setSunIntensity: (sunIntensity) => set({ sunIntensity }),
@@ -123,6 +127,7 @@ export const useDebugStore = create<DebugStore>()(
         worldRenderMode: s.worldRenderMode,
         objectRenderMode: s.objectRenderMode,
         controllerMode: s.controllerMode,
+        flyMouseSensitivity: s.flyMouseSensitivity,
         dofEnabled: s.dofEnabled,
         focalDistance: s.focalDistance,
         apertureAngle: s.apertureAngle,

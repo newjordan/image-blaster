@@ -3,6 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useCameraGestures } from '../camera/useCameraGestures'
 import { cameraFocusTarget } from '../camera/cameraFocus'
+import { useDebugStore } from '../../store/debug'
 
 export interface FlyControllerHandle {
   reset: () => void
@@ -24,6 +25,7 @@ const _euler = new THREE.Euler(0, 0, 0, 'YXZ')
 
 export const FlyController = forwardRef<FlyControllerHandle>(function FlyController(_, ref) {
   const { camera, gl } = useThree()
+  const mouseSensitivity = useDebugStore((s) => s.flyMouseSensitivity)
   const keys = useRef(new Set<string>())
   const rawYaw = useRef(0)
   const rawPitch = useRef(0)
@@ -48,10 +50,10 @@ export const FlyController = forwardRef<FlyControllerHandle>(function FlyControl
 
   const applyTumble = useCallback((dx: number, dy: number) => {
     cameraFocusTarget.current = null
-    rawYaw.current -= dx * 0.004
-    rawPitch.current -= dy * 0.004
+    rawYaw.current -= dx * mouseSensitivity
+    rawPitch.current -= dy * mouseSensitivity
     rawPitch.current = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, rawPitch.current))
-  }, [])
+  }, [mouseSensitivity])
 
   useCameraGestures({ domElement: gl.domElement, onDollyPixels: applyDolly, onTumblePixels: applyTumble })
 

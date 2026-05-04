@@ -61,7 +61,7 @@ export function GroundPlane() {
             <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
               <planeGeometry args={[GRID_SIZE, GRID_SIZE, GRID_DIVS, GRID_DIVS]} />
               {isLit
-                ? <shadowMaterial transparent opacity={1} depthWrite={false} />
+                ? <shadowMaterial transparent opacity={0.8} depthWrite={false} />
                 : <meshStandardMaterial color={SHADED_COLOR} roughness={0.75} metalness={0} />
               }
             </mesh>

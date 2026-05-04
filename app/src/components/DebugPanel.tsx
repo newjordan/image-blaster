@@ -84,6 +84,7 @@ function dumpParams() {
     }
     out.butterfly = butterfly
   }
+  out.flyMouseSensitivity = debug.flyMouseSensitivity
 
   const json = JSON.stringify(out, null, 2)
   // eslint-disable-next-line no-console
@@ -98,6 +99,7 @@ export function DebugPanel() {
   const setShowOrigin = useDebugStore((s) => s.setShowOrigin)
   const controllerMode = useDebugStore((s) => s.controllerMode)
   const setControllerMode = useDebugStore((s) => s.setControllerMode)
+  const flyMouseSensitivity = useDebugStore((s) => s.flyMouseSensitivity)
   const dofEnabled = useDebugStore((s) => s.dofEnabled)
   const focalDistance = useDebugStore((s) => s.focalDistance)
   const apertureAngle = useDebugStore((s) => s.apertureAngle)
@@ -130,6 +132,7 @@ export function DebugPanel() {
   const setEnvironmentIntensity = useDebugStore((s) => s.setEnvironmentIntensity)
   const setSunIntensity = useDebugStore((s) => s.setSunIntensity)
   const setSunColor = useDebugStore((s) => s.setSunColor)
+  const setFlyMouseSensitivity = useDebugStore((s) => s.setFlyMouseSensitivity)
 
   useControls({
     'Clear Local Storage + Reload': button(clearLocalStorageAndReload),
@@ -265,6 +268,14 @@ export function DebugPanel() {
       options: { Fly: 'fly', FPS: 'fps', Butterfly: 'butterfly' },
       label: 'Controller',
       onChange: (v: string) => setControllerMode(v as typeof controllerMode),
+    },
+    flyMouseSensitivity: {
+      value: flyMouseSensitivity,
+      min: 0.0005,
+      max: 0.02,
+      step: 0.0005,
+      label: 'Fly Mouse Sens.',
+      onChange: setFlyMouseSensitivity,
     },
   })
 

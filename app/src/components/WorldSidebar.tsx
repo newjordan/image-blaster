@@ -1,4 +1,5 @@
-import { ArrowSquareOut, Cube, GlobeSimple } from '@phosphor-icons/react'
+import { useState } from 'react'
+import { ArrowSquareOut, Cube, GlobeSimple, ListIcon, QuestionMarkIcon } from '@phosphor-icons/react'
 import { useLocation } from 'wouter'
 import type { WorldEntry } from '../types/world'
 import { pendingFocusId } from '../modules/camera/cameraFocus'
@@ -36,39 +37,52 @@ function IconTile({
 
 export function WorldSidebar({ worlds, activeSlug }: Props) {
   const [, navigate] = useLocation()
+  const [menuOpen, setMenuOpen] = useState(false)
+
+  const selectWorld = (slug: string) => {
+    navigate(`/${slug}`)
+    setMenuOpen(false)
+  }
 
   return (
-    <aside className="w-56 sm:w-64 max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden rounded-3xl bg-black/60 backdrop-blur-md ring-1 ring-white/10 shadow-2xl">
-      <div className="px-4 py-3 text-[13px] font-semibold uppercase tracking-[0.18em] text-white/35 border-b border-white/10 flex-shrink-0">
-        image-blaster
+    <aside className="w-full sm:w-64 max-h-[calc(100vh-2rem)] flex flex-col gap-2">
+      <div className="flex items-center justify-between rounded-3xl bg-black/60 px-4 py-3 text-[13px] font-medium font-mono backdrop-blur-md ring-1 ring-white/10 shadow-2xl flex-shrink-0">
+        <AppButton
+          onClick={() => setMenuOpen((open) => !open)}
+          className="min-w-0 flex-1 gap-2 p-0 font-mono text-white opacity-100 hover:bg-transparent"
+          aria-expanded={menuOpen}
+        >
+          <ListIcon size={16} weight="regular" className="text-white/60 sm:hidden" />
+          <span>image-blaster</span>
+        </AppButton>
+        <a
+          href="https://github.com/neilsonnn/image-blaster"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex h-7 w-7 items-center justify-center rounded-lg p-1 text-white opacity-80 transition-[background-color,opacity] hover:bg-white/10 hover:opacity-100"
+          aria-label="Open image-blaster repository"
+        >
+          <span className="text-sm leading-none"><QuestionMarkIcon size={16} weight="regular" /></span>
+        </a>
       </div>
 
-      <div className="flex flex-col gap-2 overflow-y-auto p-2">
+      <div className={`${menuOpen ? 'flex' : 'hidden'} sm:flex flex-col gap-2 overflow-y-auto rounded-3xl bg-black/60 p-2 backdrop-blur-md ring-1 ring-white/10 shadow-2xl`}>
         {worlds.map(({ slug, world, objectAssets }) => {
           const isActive = slug === activeSlug
           const name = world.display_name || slug
           return (
             <div key={slug} className="rounded-2xl">
               <AppButton
-                onClick={() => navigate(`/${slug}`)}
+                onClick={() => selectWorld(slug)}
                 active={isActive}
                 className={`
-                  w-full flex items-center gap-3 text-left
-                  ${isActive ? 'bg-white/14 ring-1 ring-white/12' : ''}
+                  w-full flex items-center gap-3 text-left p-2
+                  ${isActive ? 'border-white/50 bg-white/20 border-2' : ''}
                 `}
               >
-                <img
-                  src={world.assets.thumbnail_url}
-                  alt={name}
-                  className="w-10 h-10 rounded-xl object-cover flex-shrink-0 ring-1 ring-white/10"
-                />
                 <span className="min-w-0 flex-1">
                   <span className="block text-white text-sm font-semibold leading-tight truncate">{name}</span>
-                  <span className="block text-white/40 text-[11px] leading-tight truncate">{slug}</span>
                 </span>
-                {isActive && (
-                  <span className="w-2 h-2 rounded-full bg-white flex-shrink-0" />
-                )}
               </AppButton>
 
               <div
@@ -80,7 +94,7 @@ export function WorldSidebar({ worlds, activeSlug }: Props) {
                 <div className="mt-1.5 ml-3 pl-3 border-l border-white/10 flex flex-col gap-1">
                   <div className="group flex items-center gap-1">
                     <AppButton
-                      onClick={() => navigate(`/${slug}`)}
+                      onClick={() => selectWorld(slug)}
                       className="min-w-0 flex flex-1 items-center gap-2.5 text-left"
                     >
                       <IconTile thumbnailUrl={world.assets.thumbnail_url} alt={name}>
@@ -88,7 +102,7 @@ export function WorldSidebar({ worlds, activeSlug }: Props) {
                       </IconTile>
                       <span className="min-w-0 flex-1">
                         <span className="block text-white/85 text-xs font-semibold leading-tight truncate">{slug}</span>
-                        <span className="block text-white/40 text-[11px] leading-tight truncate">{name}</span>
+                        <span className="block text-white/40 text-[11px] leading-tight truncate">World (.spz)</span>
                       </span>
                     </AppButton>
                     {world.world_marble_url && (
@@ -106,7 +120,10 @@ export function WorldSidebar({ worlds, activeSlug }: Props) {
                   {objectAssets.map((obj) => (
                     <AppButton
                       key={obj.id}
-                      onClick={() => { pendingFocusId.current = obj.id }}
+                      onClick={() => {
+                        pendingFocusId.current = obj.id
+                        setMenuOpen(false)
+                      }}
                       className="flex items-center gap-2.5 text-left group"
                     >
                       <IconTile thumbnailUrl={obj.thumbnailUrl} alt={obj.name}>
@@ -117,7 +134,7 @@ export function WorldSidebar({ worlds, activeSlug }: Props) {
                           {obj.name}
                         </span>
                         <span className="block text-white/35 text-[10px] leading-tight truncate">
-                          Object
+                          Object (.glb)
                         </span>
                       </span>
                     </AppButton>

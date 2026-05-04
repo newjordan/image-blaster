@@ -21,7 +21,7 @@ export function WorldCollider({ url, flipY, groundPlaneOffset, metricScaleFactor
   const { wireframeMaterial, shadedMaterial, wireframeOverlayMaterial } = useAssetMaterials()
 
   // Own shadow material instance — not shared, so shader compiles correctly per-mesh
-  const shadowMat = useMemo(() => new THREE.ShadowMaterial({ opacity: 0.3, transparent: true, depthWrite: false }), [])
+  const shadowMat = useMemo(() => new THREE.ShadowMaterial({ opacity: 0.8, transparent: true, depthWrite: false }), [])
   useEffect(() => () => shadowMat.dispose(), [shadowMat])
 
   const { scene, overlayScene } = useMemo(() => ({
