@@ -2,7 +2,47 @@ import { useEffect } from 'react'
 import { useControls, button, folder } from 'leva'
 import { useDebugStore } from '../store/debug'
 import { useButterflyStore } from '../modules/butterfly/store'
-import { LEVA_SCHEMA, DEFAULT_PARAMS, type ButterflyParams } from '../modules/butterfly/params'
+import { FOLDER_ORDER, PARAM_SPECS, DEFAULT_PARAMS, type ButterflyParams } from '../modules/butterfly/params'
+
+function clearLocalStorageAndReload() {
+  window.localStorage.clear()
+  window.location.reload()
+}
+
+type ButterflySpec = (typeof PARAM_SPECS)[keyof typeof PARAM_SPECS]
+// Leva schema composition is intentionally dynamic because butterfly params are data-driven.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnySchema = any
+
+function specToLeva(spec: ButterflySpec) {
+  const out: Record<string, unknown> = { value: spec.value }
+  if ('min' in spec) {
+    out.min = spec.min
+    out.max = spec.max
+    out.step = spec.step
+  }
+  if ('label' in spec && spec.label) out.label = spec.label
+  return out
+}
+
+function createButterflyLevaSchema() {
+  const root: Record<string, AnySchema> = {}
+  for (const [key, spec] of Object.entries(PARAM_SPECS)) {
+    if (spec.folder === null) root[key] = specToLeva(spec)
+  }
+  for (const f of FOLDER_ORDER) {
+    const entries: Record<string, AnySchema> = {}
+    for (const [key, spec] of Object.entries(PARAM_SPECS)) {
+      if (spec.folder === f) entries[key] = specToLeva(spec)
+    }
+    if (Object.keys(entries).length > 0) {
+      root[f] = folder(entries, { collapsed: false })
+    }
+  }
+  return root
+}
+
+const BUTTERFLY_LEVA_SCHEMA = createButterflyLevaSchema()
 
 function dumpParams() {
   const debug = useDebugStore.getState()
@@ -92,6 +132,7 @@ export function DebugPanel() {
   const setSunColor = useDebugStore((s) => s.setSunColor)
 
   useControls({
+    'Clear Local Storage + Reload': button(clearLocalStorageAndReload),
     'Dump Params (copy JSON)': button(dumpParams),
     Scene: folder({
       showOrigin: {
@@ -140,7 +181,7 @@ export function DebugPanel() {
       },
       falloffRate: {
         value: falloffRate,
-        min: 0,
+        min: 0.01,
         max: 2,
         step: 0.01,
         label: 'Exp Rate',
@@ -231,7 +272,7 @@ export function DebugPanel() {
 }
 
 function ButterflyLevaBridge() {
-  const values = useControls(LEVA_SCHEMA) as unknown as ButterflyParams
+  const values = useControls(BUTTERFLY_LEVA_SCHEMA) as unknown as ButterflyParams
 
   useEffect(() => {
     const state = useButterflyStore.getState()

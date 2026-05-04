@@ -22,7 +22,7 @@ const FADE_SPEED = FADE_DURATION > 0 ? 1 / FADE_DURATION : Infinity
 type CharHandle = CharacterControllerHandle | ButterflyControllerHandle | FlyControllerHandle
 
 interface TransitionDriverProps {
-  splatRef: React.RefObject<SplatRendererHandle | null>
+  splatRefs: readonly React.RefObject<SplatRendererHandle | null>[]
   envRef: React.RefObject<EnvironmentMapHandle | null>
   charRef: React.RefObject<CharHandle | null>
   phaseRef: React.RefObject<'idle' | 'out' | 'in'>
@@ -35,7 +35,7 @@ interface TransitionDriverProps {
 }
 
 function TransitionDriver({
-  splatRef,
+  splatRefs,
   envRef,
   charRef,
   phaseRef,
@@ -47,10 +47,10 @@ function TransitionDriver({
   onSwap,
 }: TransitionDriverProps) {
   useFrame((_, delta) => {
-    const splat = splatRef.current
-
     const apply = (amount: number) => {
-      splat?.setReveal(amount)
+      for (const splatRef of splatRefs) {
+        splatRef.current?.setReveal(amount)
+      }
       envRef.current?.setIntensity(amount)
     }
 
@@ -93,7 +93,8 @@ export function WorldViewer({ world: desiredWorld, slug: desiredSlug, objectAsse
   const [activeObjectAssets, setActiveObjectAssets] = useState(desiredObjectAssets)
   const [activeSourceImageUrl, setActiveSourceImageUrl] = useState(desiredSourceImageUrl)
 
-  const splatRef = useRef<SplatRendererHandle>(null)
+  const lowSplatRef = useRef<SplatRendererHandle>(null)
+  const highSplatRef = useRef<SplatRendererHandle>(null)
   const envRef = useRef<EnvironmentMapHandle>(null)
   const charRef = useRef<CharHandle>(null)
   const worldRenderMode = useDebugStore((s) => s.worldRenderMode)
@@ -125,12 +126,14 @@ export function WorldViewer({ world: desiredWorld, slug: desiredSlug, objectAsse
     if (controllerResetToken > 0) charRef.current?.reset()
   }, [controllerResetToken])
 
-  const splatUrl = getSplatUrl(activeWorld, viewerQuality)
+  const lowSplatUrl = getSplatUrl(activeWorld, ViewerQuality.Low)
+  const highSplatUrl = getSplatUrl(activeWorld, ViewerQuality.High)
+  const hasSeparateQualitySplats = Boolean(lowSplatUrl && highSplatUrl && lowSplatUrl !== highSplatUrl)
   const { ground_plane_offset, flip_y, metric_scale_factor } = activeWorld.assets.splats.semantics_metadata
   const flipY = flip_y ?? true
   const isHighQuality = viewerQuality === ViewerQuality.High
-  const showSplat = worldRenderMode !== WorldRenderMode.ObjectOnly
-               && objectRenderMode !== ObjectRenderMode.Wireframe
+  const splatVisible = worldRenderMode !== WorldRenderMode.ObjectOnly
+                    && objectRenderMode !== ObjectRenderMode.Wireframe
   const showObjects = worldRenderMode !== WorldRenderMode.SplatOnly
   return (
     <>
@@ -143,7 +146,7 @@ export function WorldViewer({ world: desiredWorld, slug: desiredSlug, objectAsse
       >
         <Suspense fallback={null}>
           <TransitionDriver
-            splatRef={splatRef}
+            splatRefs={[lowSplatRef, highSplatRef]}
             envRef={envRef}
             charRef={charRef}
             phaseRef={phaseRef}
@@ -177,8 +180,25 @@ export function WorldViewer({ world: desiredWorld, slug: desiredSlug, objectAsse
             )}
             <GroundPlane />
           </Physics>
-          {showSplat && splatUrl && (
-            <SplatRenderer ref={splatRef} url={splatUrl} groundPlaneOffset={ground_plane_offset} flipY={flipY} metricScaleFactor={metric_scale_factor} />
+          {lowSplatUrl && (
+            <SplatRenderer
+              ref={lowSplatRef}
+              url={lowSplatUrl}
+              visible={splatVisible && (viewerQuality === ViewerQuality.Low || !hasSeparateQualitySplats)}
+              groundPlaneOffset={ground_plane_offset}
+              flipY={flipY}
+              metricScaleFactor={metric_scale_factor}
+            />
+          )}
+          {hasSeparateQualitySplats && highSplatUrl && (
+            <SplatRenderer
+              ref={highSplatRef}
+              url={highSplatUrl}
+              visible={splatVisible && viewerQuality === ViewerQuality.High}
+              groundPlaneOffset={ground_plane_offset}
+              flipY={flipY}
+              metricScaleFactor={metric_scale_factor}
+            />
           )}
           <directionalLight
             castShadow={isHighQuality}

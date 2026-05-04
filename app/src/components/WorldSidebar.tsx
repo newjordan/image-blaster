@@ -2,6 +2,7 @@ import { ArrowSquareOut, Cube, GlobeSimple } from '@phosphor-icons/react'
 import { useLocation } from 'wouter'
 import type { WorldEntry } from '../types/world'
 import { pendingFocusId } from '../modules/camera/cameraFocus'
+import { AppButton } from './AppButton'
 
 interface Props {
   worlds: WorldEntry[]
@@ -48,12 +49,12 @@ export function WorldSidebar({ worlds, activeSlug }: Props) {
           const name = world.display_name || slug
           return (
             <div key={slug} className="rounded-2xl">
-              <button
+              <AppButton
                 onClick={() => navigate(`/${slug}`)}
+                active={isActive}
                 className={`
-                  w-full flex items-center gap-3 px-2.5 py-2.5 rounded-2xl text-left
-                  transition-colors duration-150
-                  ${isActive ? 'bg-white/14 ring-1 ring-white/12' : 'hover:bg-white/8'}
+                  w-full flex items-center gap-3 text-left
+                  ${isActive ? 'bg-white/14 ring-1 ring-white/12' : ''}
                 `}
               >
                 <img
@@ -68,7 +69,7 @@ export function WorldSidebar({ worlds, activeSlug }: Props) {
                 {isActive && (
                   <span className="w-2 h-2 rounded-full bg-white flex-shrink-0" />
                 )}
-              </button>
+              </AppButton>
 
               <div
                 className={`
@@ -77,10 +78,10 @@ export function WorldSidebar({ worlds, activeSlug }: Props) {
                 `}
               >
                 <div className="mt-1.5 ml-3 pl-3 border-l border-white/10 flex flex-col gap-1">
-                  <div className="group flex items-center gap-1 rounded-xl hover:bg-white/8 transition-colors">
-                    <button
+                  <div className="group flex items-center gap-1">
+                    <AppButton
                       onClick={() => navigate(`/${slug}`)}
-                      className="min-w-0 flex flex-1 items-center gap-2.5 px-2.5 py-2 text-left"
+                      className="min-w-0 flex flex-1 items-center gap-2.5 text-left"
                     >
                       <IconTile thumbnailUrl={world.assets.thumbnail_url} alt={name}>
                         <GlobeSimple size={18} weight="regular" />
@@ -89,13 +90,13 @@ export function WorldSidebar({ worlds, activeSlug }: Props) {
                         <span className="block text-white/85 text-xs font-semibold leading-tight truncate">{slug}</span>
                         <span className="block text-white/40 text-[11px] leading-tight truncate">{name}</span>
                       </span>
-                    </button>
+                    </AppButton>
                     {world.world_marble_url && (
                       <a
                         href={world.world_marble_url}
                         target="_blank"
                         rel="noreferrer"
-                        className="mr-1 w-8 h-8 flex items-center justify-center rounded-lg text-white/45 hover:text-white hover:bg-white/10 transition-colors flex-shrink-0"
+                        className="mr-1 w-8 h-8 flex items-center justify-center rounded p-1 text-white opacity-80 hover:bg-white/8 hover:opacity-100 transition-[background-color,opacity] flex-shrink-0"
                         aria-label={`Open ${name} in World Labs`}
                       >
                         <ArrowSquareOut size={16} weight="bold" />
@@ -103,10 +104,10 @@ export function WorldSidebar({ worlds, activeSlug }: Props) {
                     )}
                   </div>
                   {objectAssets.map((obj) => (
-                    <button
+                    <AppButton
                       key={obj.id}
                       onClick={() => { pendingFocusId.current = obj.id }}
-                      className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl hover:bg-white/8 transition-colors text-left group"
+                      className="flex items-center gap-2.5 text-left group"
                     >
                       <IconTile thumbnailUrl={obj.thumbnailUrl} alt={obj.name}>
                         <Cube size={18} weight="regular" />
@@ -119,7 +120,7 @@ export function WorldSidebar({ worlds, activeSlug }: Props) {
                           Object
                         </span>
                       </span>
-                    </button>
+                    </AppButton>
                   ))}
                 </div>
               </div>

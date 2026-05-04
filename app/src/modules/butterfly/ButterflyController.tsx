@@ -40,6 +40,7 @@ const _forward = new THREE.Vector3()
 const _right = new THREE.Vector3()
 const _move = new THREE.Vector3()
 const _up = new THREE.Vector3(0, 1, 0)
+const DEFAULT_SPAWN = new THREE.Vector3(0, 1, -0.5)
 
 export const ButterflyController = forwardRef<ButterflyControllerHandle>(
   function ButterflyController(_props, ref) {
@@ -65,8 +66,8 @@ export const ButterflyController = forwardRef<ButterflyControllerHandle>(
       }
     }, [world])
 
-    const targetPos = useRef(new THREE.Vector3())
-    const pivotPos = useRef(new THREE.Vector3())
+    const targetPos = useRef(DEFAULT_SPAWN.clone())
+    const pivotPos = useRef(DEFAULT_SPAWN.clone())
     const flockCentroid = useRef(new THREE.Vector3())
     const cameraPosRef = useRef(new THREE.Vector3())
     const moveIntensityRef = useRef(0)
@@ -77,8 +78,8 @@ export const ButterflyController = forwardRef<ButterflyControllerHandle>(
 
     const reset = () => {
       const params = useButterflyStore.getState()
-      targetPos.current.set(0, 0, 0)
-      pivotPos.current.set(0, 0, 0)
+      targetPos.current.copy(DEFAULT_SPAWN)
+      pivotPos.current.copy(DEFAULT_SPAWN)
       input.yaw.current = params.defaultYaw
       input.pitch.current = params.defaultPitch
       input.distance.current = params.defaultDistance
@@ -86,7 +87,7 @@ export const ButterflyController = forwardRef<ButterflyControllerHandle>(
       input.keys.current.clear()
       input.touchMoveVec.current.x = 0
       input.touchMoveVec.current.y = 0
-      bodyRef.current?.setTranslation({ x: 0, y: 0, z: 0 }, true)
+      bodyRef.current?.setTranslation(DEFAULT_SPAWN, true)
       bodyRef.current?.setLinvel({ x: 0, y: 0, z: 0 }, true)
       flockRef.current?.reset(targetPos.current)
     }
@@ -171,7 +172,7 @@ export const ButterflyController = forwardRef<ButterflyControllerHandle>(
         <RigidBody
           ref={bodyRef}
           type="kinematicPosition"
-          position={[0, 0, 0]}
+          position={DEFAULT_SPAWN}
           colliders={false}
         >
           <BallCollider args={[useButterflyStore.getState().targetRadius]} />

@@ -11,6 +11,7 @@ import { cameraFocusTarget, pendingFocusId } from '../camera/cameraFocus'
 const GRID_CELL_SIZE = 1
 const SPAWN_RADIUS = 0.25
 const SPAWN_INTERVAL_MS = 250
+const OBJECT_RESET_ORIGIN: [number, number, number] = [0, 0, -0.5]
 const _focusPoint = new THREE.Vector3()
 
 interface SpawnedObject {
@@ -63,9 +64,9 @@ function gridPosition(index: number, total: number): [number, number, number] {
   const row = Math.floor(index / columns)
 
   return [
-    (column - (columns - 1) / 2) * GRID_CELL_SIZE,
-    0,
-    (row - (rows - 1) / 2) * GRID_CELL_SIZE,
+    OBJECT_RESET_ORIGIN[0] + (column - (columns - 1) / 2) * GRID_CELL_SIZE,
+    OBJECT_RESET_ORIGIN[1],
+    OBJECT_RESET_ORIGIN[2] + (row - (rows - 1) / 2) * GRID_CELL_SIZE,
   ]
 }
 

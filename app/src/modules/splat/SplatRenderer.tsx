@@ -2,7 +2,6 @@ import { useMemo, useRef, forwardRef, useImperativeHandle, useEffect } from 'rea
 import { extend, useThree, useFrame } from '@react-three/fiber'
 import { SplatMesh, SparkRenderer, dyno } from '@sparkjsdev/spark'
 import { useDebugStore } from '../../store/debug'
-import { ViewerQuality } from '../../types/world'
 
 // Patch Spark's default vertex shader to swap the linear thin-lens CoC formula
 // for a configurable curve: zero blur within `sharpRange` of the focal plane,
@@ -18,6 +17,8 @@ const APERTURE_DECL = 'uniform float apertureAngle;'
 const APERTURE_DECL_PLUS = `uniform float apertureAngle;
 uniform float sharpRange;
 uniform float falloffRate;`
+const DEFAULT_SHARP_RANGE = 2
+const DEFAULT_FALLOFF_RATE = 0.3
 
 const SparkRendererEl = extend(SparkRenderer)
 const SplatMeshEl = extend(SplatMesh)
@@ -33,13 +34,15 @@ export interface SplatRendererHandle {
 
 interface Props {
   url: string
+  visible?: boolean
   groundPlaneOffset?: number
   flipY?: boolean
   metricScaleFactor?: number
 }
 
-function makeRevealModifier() {
+function makeRevealModifier(initialVisible = true) {
   const revealFloat = dyno.dynoFloat(1)
+  const visibleFloat = dyno.dynoFloat(initialVisible ? 1 : 0)
   const yMinFloat = dyno.dynoFloat(-1)
   const yMaxFloat = dyno.dynoFloat(1)
   const windowFloat = dyno.dynoFloat(FADE_WINDOW)
@@ -47,12 +50,13 @@ function makeRevealModifier() {
     inTypes: {
       gsplat: dyno.Gsplat,
       reveal: 'float' as const,
+      visible: 'float' as const,
       yMin: 'float' as const,
       yMax: 'float' as const,
       win: 'float' as const,
     },
     outTypes: { gsplat: dyno.Gsplat },
-    inputs: { reveal: revealFloat, yMin: yMinFloat, yMax: yMaxFloat, win: windowFloat },
+    inputs: { reveal: revealFloat, visible: visibleFloat, yMin: yMinFloat, yMax: yMaxFloat, win: windowFloat },
     statements: ({ inputs, outputs }) => [
       `${outputs.gsplat} = ${inputs.gsplat};`,
       // Local center.y maps to world via a Math.PI X-rotation in the parent group,
@@ -64,7 +68,7 @@ function makeRevealModifier() {
       `float scaledReveal = ${inputs.reveal} * (1.0 + ${inputs.win});`,
       `float threshold = (1.0 - n) * ${inputs.win};`,
       `float a = clamp(scaledReveal - threshold, 0.0, 1.0);`,
-      `${outputs.gsplat}.rgba.a *= a;`,
+      `${outputs.gsplat}.rgba.a *= a * ${inputs.visible};`,
     ],
   })
   const modifier = dyno.dynoBlock(
@@ -72,17 +76,22 @@ function makeRevealModifier() {
     { gsplat: dyno.Gsplat },
     ({ gsplat }) => ({ gsplat: modifierDyno.apply({ gsplat }).gsplat }),
   )
-  return { revealFloat, yMinFloat, yMaxFloat, modifier }
+  return { revealFloat, visibleFloat, yMinFloat, yMaxFloat, modifier }
 }
 
 
 export const SplatRenderer = forwardRef<SplatRendererHandle, Props>(
-  ({ url, groundPlaneOffset = 0, flipY, metricScaleFactor = 1 }, ref) => {
+  ({ url, visible = true, groundPlaneOffset = 0, flipY, metricScaleFactor = 1 }, ref) => {
     const renderer = useThree((state) => state.gl)
     const splatRef = useRef<SplatMesh>(null)
     const sparkRef = useRef<SparkRenderer>(null)
     
-    const { revealFloat, yMinFloat, yMaxFloat, modifier } = useRef(makeRevealModifier()).current
+    const { revealFloat, visibleFloat, yMinFloat, yMaxFloat, modifier } = useRef(makeRevealModifier(visible)).current
+
+    useEffect(() => {
+      visibleFloat.value = visible ? 1 : 0
+      splatRef.current?.updateVersion()
+    }, [visible, visibleFloat])
 
     // Patch the SparkRenderer's vertex shader once to add our custom CoC curve
     // and inject `sharpRange` / `falloffRate` uniforms.
@@ -92,8 +101,8 @@ export const SplatRenderer = forwardRef<SplatRendererHandle, Props>(
       const mat = spark.material
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const u = mat.uniforms as any
-      if (!u.sharpRange) u.sharpRange = { value: 2 }
-      if (!u.falloffRate) u.falloffRate = { value: 0.3 }
+      if (!u.sharpRange) u.sharpRange = { value: DEFAULT_SHARP_RANGE }
+      if (!u.falloffRate) u.falloffRate = { value: DEFAULT_FALLOFF_RATE }
       if (!mat.vertexShader.includes('uniform float sharpRange;')) {
         mat.vertexShader = mat.vertexShader
           .replace(APERTURE_DECL, APERTURE_DECL_PLUS)
@@ -108,12 +117,12 @@ export const SplatRenderer = forwardRef<SplatRendererHandle, Props>(
       const s = useDebugStore.getState()
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const u = spark.material.uniforms as any
-      if (s.viewerQuality === ViewerQuality.High && s.dofEnabled) {
+      if (s.dofEnabled) {
         spark.focalDistance = s.focalDistance
         spark.apertureAngle = s.apertureAngle
         spark.falloff = s.falloff
-        if (u.sharpRange) u.sharpRange.value = s.sharpRange
-        if (u.falloffRate) u.falloffRate.value = s.falloffRate
+        if (u.sharpRange) u.sharpRange.value = Number.isFinite(s.sharpRange) ? s.sharpRange : DEFAULT_SHARP_RANGE
+        if (u.falloffRate) u.falloffRate.value = s.falloffRate > 0 ? s.falloffRate : DEFAULT_FALLOFF_RATE
       } else {
         spark.focalDistance = 0
         spark.apertureAngle = 0

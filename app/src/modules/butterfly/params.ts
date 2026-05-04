@@ -1,5 +1,3 @@
-import { folder } from 'leva'
-
 type Folder = 'Flight' | 'Camera' | 'Shake' | 'Flock' | 'Noise' | 'Appearance' | 'Audio' | null
 
 interface NumSpec {
@@ -17,7 +15,7 @@ interface BoolSpec {
 }
 type Spec = NumSpec | BoolSpec
 
-const FOLDER_ORDER: Exclude<Folder, null>[] = ['Flight', 'Camera', 'Shake', 'Flock', 'Noise', 'Appearance', 'Audio']
+export const FOLDER_ORDER: Exclude<Folder, null>[] = ['Flight', 'Camera', 'Shake', 'Flock', 'Noise', 'Appearance', 'Audio']
 
 export const PARAM_SPECS = {
   paused: { value: false, folder: null, label: 'Pause Movement' },
@@ -29,7 +27,7 @@ export const PARAM_SPECS = {
 
   cameraPositionLerp: { value: 2.5, min: 0.1, max: 30, step: 0.1, folder: 'Camera' },
   cameraRotationLerp: { value: 8, min: 0.1, max: 60, step: 0.1, folder: 'Camera' },
-  mouseSensitivity: { value: 0.001, min: 0.0005, max: 0.02, step: 0.0005, folder: 'Camera' },
+  mouseSensitivity: { value: 0.0001, min: 0.0005, max: 0.02, step: 0.0005, folder: 'Camera' },
   invertY: { value: true, folder: 'Camera', label: 'Invert Y' },
   minDistance: { value: 0.3, min: 0.1, max: 10, step: 0.05, folder: 'Camera' },
   maxDistance: { value: 0.8, min: 0.2, max: 50, step: 0.1, folder: 'Camera' },
@@ -100,34 +98,3 @@ export type ButterflyParams = {
 export const DEFAULT_PARAMS: ButterflyParams = Object.fromEntries(
   Object.entries(PARAM_SPECS).map(([k, s]) => [k, s.value]),
 ) as ButterflyParams
-
-function specToLeva(spec: Spec) {
-  const out: Record<string, unknown> = { value: spec.value }
-  if ('min' in spec) {
-    out.min = spec.min
-    out.max = spec.max
-    out.step = spec.step
-  }
-  if (spec.label) out.label = spec.label
-  return out
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnySchema = any
-
-export const LEVA_SCHEMA = (() => {
-  const root: Record<string, AnySchema> = {}
-  for (const [key, spec] of Object.entries(PARAM_SPECS)) {
-    if (spec.folder === null) root[key] = specToLeva(spec)
-  }
-  for (const f of FOLDER_ORDER) {
-    const entries: Record<string, AnySchema> = {}
-    for (const [key, spec] of Object.entries(PARAM_SPECS)) {
-      if (spec.folder === f) entries[key] = specToLeva(spec)
-    }
-    if (Object.keys(entries).length > 0) {
-      root[f] = folder(entries, { collapsed: false })
-    }
-  }
-  return root
-})()

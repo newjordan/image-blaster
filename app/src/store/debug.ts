@@ -7,7 +7,7 @@ export type ControllerMode = 'fly' | 'fps' | 'butterfly'
 function defaultViewerQuality() {
   if (typeof window === 'undefined') return ViewerQuality.High
   const mobileQuery = '(hover: none), (pointer: coarse), (max-width: 767px)'
-  return window.matchMedia(mobileQuery).matches ? ViewerQuality.Medium : ViewerQuality.High
+  return window.matchMedia(mobileQuery).matches ? ViewerQuality.Low : ViewerQuality.High
 }
 
 interface DebugStore {
@@ -103,7 +103,7 @@ export const useDebugStore = create<DebugStore>()(
       setChromaticEnabled: (chromaticEnabled) => set({ chromaticEnabled }),
       chromaticOffset: 0.0008,
       setChromaticOffset: (chromaticOffset) => set({ chromaticOffset }),
-      motionBlurEnabled: false,
+      motionBlurEnabled: true,
       setMotionBlurEnabled: (motionBlurEnabled) => set({ motionBlurEnabled }),
       motionBlurStrength: 0.3,
       setMotionBlurStrength: (motionBlurStrength) => set({ motionBlurStrength }),
@@ -116,7 +116,7 @@ export const useDebugStore = create<DebugStore>()(
     }),
     {
       name: 'image-blaster-debug',
-      version: 6,
+      version: 8,
       // Persist user-facing viewer controls so the Leva/debug panel survives reloads.
       partialize: (s) => ({
         viewerQuality: s.viewerQuality,

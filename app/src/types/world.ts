@@ -58,6 +58,5 @@ export enum ObjectRenderMode {
 
 export enum ViewerQuality {
   Low = 'low',
-  Medium = 'medium',
   High = 'high',
 }

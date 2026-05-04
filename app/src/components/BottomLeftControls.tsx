@@ -5,13 +5,14 @@ import {
   SpeakerHigh,
   SpeakerSlash,
   GlobeHemisphereEast,
-  FadersHorizontalIcon,
+  ParkIcon,
 } from '@phosphor-icons/react'
 import { Tooltip } from '@radix-ui/themes'
 import { type ReactElement, useEffect } from 'react'
 import { useAudioStore } from '../store/audio'
 import { useDebugStore } from '../store/debug'
 import { ObjectRenderMode, ViewerQuality, WorldRenderMode } from '../types/world'
+import { AppButton } from './AppButton'
 
 const OBJECT_MODES = [
   { mode: ObjectRenderMode.Wireframe, Icon: GlobeSimple, label: 'Wireframe' },
@@ -21,7 +22,6 @@ const OBJECT_MODES = [
 
 const QUALITY_MODES = [
   { mode: ViewerQuality.Low, label: 'Low' },
-  { mode: ViewerQuality.Medium, label: 'Med' },
   { mode: ViewerQuality.High, label: 'High' },
 ] as const
 
@@ -61,8 +61,9 @@ export function BottomLeftControls() {
       const n = e.key === '1' ? 0 : e.key === '2' ? 1 : e.key === '3' ? 2 : -1
       if (n === -1) return
       if (e.altKey && e.shiftKey) {
-        const qualities = [ViewerQuality.Low, ViewerQuality.Medium, ViewerQuality.High]
-        setViewerQuality(qualities[n])
+        const qualities = [ViewerQuality.Low, ViewerQuality.High]
+        const quality = qualities[n]
+        if (quality) setViewerQuality(quality)
       } else if (e.altKey) {
         const worlds = [WorldRenderMode.Combined, WorldRenderMode.SplatOnly, WorldRenderMode.ObjectOnly]
         setWorldRenderMode(worlds[n])
@@ -76,43 +77,43 @@ export function BottomLeftControls() {
   }, [setObjectRenderMode, setWorldRenderMode, setViewerQuality])
 
   const utilBtn =
-    'w-10 h-10 flex items-center justify-center rounded-xl text-white/60 hover:text-white hover:bg-white/12 transition-colors'
+    'w-10 h-10 justify-center text-white'
 
   const modeBtn = (active: boolean) =>
-    `w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${
-      active ? 'bg-white/15 text-white' : 'text-white/45 hover:text-white/75 hover:bg-white/8'
+    `w-10 h-10 justify-center ${
+      active ? 'bg-white/15 text-white' : 'text-white'
     }`
   const pillBtn =
-    'w-24 h-10 flex items-center justify-center gap-1.5 px-3 rounded-xl text-white/80 text-xs font-medium hover:text-white hover:bg-white/8 transition-colors'
+    'w-24 h-10 gap-1.5 text-white text-xs font-medium'
 
   const currentQuality = QUALITY_MODES.find((item) => item.mode === viewerQuality) ?? QUALITY_MODES[0]
   const currentWorldMode = WORLD_MODES.find((item) => item.mode === worldRenderMode) ?? WORLD_MODES[0]
 
   return (
-    <div className="flex items-center gap-1.5 px-3 py-2.5 rounded-3xl bg-black/55 backdrop-blur-md ring-1 ring-white/10">
+    <div className="flex items-center gap-1.5 rounded-xl px-1 bg-black/55 backdrop-blur-md">
       {/* utility */}
       <ControlTooltip content={muted ? 'Unmute' : 'Mute'}>
-        <button onClick={toggleMuted} className={utilBtn}>
+        <AppButton onClick={toggleMuted} className={utilBtn}>
           {muted ? <SpeakerSlash size={18} weight="fill" /> : <SpeakerHigh size={18} weight="fill" />}
-        </button>
+        </AppButton>
       </ControlTooltip>
       <ControlTooltip content="Reset objects">
-        <button onClick={resetObjects} className={utilBtn}>
+        <AppButton onClick={resetObjects} className={utilBtn}>
           <ArrowCounterClockwise size={18} weight="bold" />
-        </button>
+        </AppButton>
       </ControlTooltip>
 
       <div className="w-px h-6 bg-white/15 mx-1" />
 
       {/* viewer quality */}
       <ControlTooltip content="Cycle quality">
-        <button
+        <AppButton
           onClick={() => setViewerQuality(nextMode(QUALITY_MODES, viewerQuality))}
           className={pillBtn}
         >
-          <FadersHorizontalIcon size={15} weight="regular" className="text-white/45 flex-shrink-0" />
+          <ParkIcon size={15} weight="regular" className="text-white/45 flex-shrink-0" />
           <span>{currentQuality.label}</span>
-        </button>
+        </AppButton>
       </ControlTooltip>
 
       <div className="w-px h-6 bg-white/15 mx-1" />
@@ -121,12 +122,13 @@ export function BottomLeftControls() {
       <div className="flex items-center gap-1 rounded-2xl bg-white/5 p-1">
         {OBJECT_MODES.map(({ mode, Icon, label }) => (
           <ControlTooltip key={mode} content={label}>
-            <button
+            <AppButton
               onClick={() => setObjectRenderMode(mode)}
+              active={objectRenderMode === mode}
               className={modeBtn(objectRenderMode === mode)}
             >
               <Icon size={17} weight={objectRenderMode === mode ? 'fill' : 'regular'} />
-            </button>
+            </AppButton>
           </ControlTooltip>
         ))}
       </div>
@@ -135,13 +137,13 @@ export function BottomLeftControls() {
 
       {/* world render mode */}
       <ControlTooltip content="Cycle world render mode">
-        <button
+        <AppButton
           onClick={() => setWorldRenderMode(nextMode(WORLD_MODES, worldRenderMode))}
           className={pillBtn}
         >
           <GlobeSimple size={15} weight="regular" className="text-white/45 flex-shrink-0" />
           <span>{currentWorldMode.label}</span>
-        </button>
+        </AppButton>
       </ControlTooltip>
     </div>
   )

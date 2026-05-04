@@ -12,6 +12,9 @@ const SPEED = 4
 const JUMP_FORCE = 6
 const SMOOTH = 0.12 // mouse smoothing factor (lower = smoother)
 const DOLLY_UNITS_PER_PIXEL = 0.01
+const CHARACTER_SPAWN = { x: 0, y: 1, z: -0.5 }
+const CHARACTER_SPAWN_POSITION: [number, number, number] = [CHARACTER_SPAWN.x, CHARACTER_SPAWN.y, CHARACTER_SPAWN.z]
+const DEFAULT_YAW = Math.PI
 
 const _forward = new THREE.Vector3()
 const _right = new THREE.Vector3()
@@ -25,23 +28,28 @@ export const CharacterController = forwardRef<CharacterControllerHandle>(
   const { camera, gl } = useThree()
   useRapier()
 
-  useImperativeHandle(ref, () => ({
-    reset: () => {
-      if (!bodyRef.current) return
-      bodyRef.current.setTranslation({ x: 0, y: 1, z: 0 }, true)
-      bodyRef.current.setLinvel({ x: 0, y: 0, z: 0 }, true)
-      bodyRef.current.setAngvel({ x: 0, y: 0, z: 0 }, true)
-    },
-  }))
-
   const keys = useRef(new Set<string>())
-  const rawYaw = useRef(0)
+  const rawYaw = useRef(DEFAULT_YAW)
   const rawPitch = useRef(0)
-  const smoothYaw = useRef(0)
+  const smoothYaw = useRef(DEFAULT_YAW)
   const smoothPitch = useRef(0)
   const touchLook = useRef<{ id: number; x: number; y: number } | null>(null)
   const touchMove = useRef<{ id: number; x: number; y: number } | null>(null)
   const [joystickPos, setJoystickPos] = useState({ x: 0, y: 0 })
+
+  useImperativeHandle(ref, () => ({
+    reset: () => {
+      if (!bodyRef.current) return
+      bodyRef.current.setTranslation(CHARACTER_SPAWN, true)
+      bodyRef.current.setLinvel({ x: 0, y: 0, z: 0 }, true)
+      bodyRef.current.setAngvel({ x: 0, y: 0, z: 0 }, true)
+      rawYaw.current = DEFAULT_YAW
+      rawPitch.current = 0
+      smoothYaw.current = DEFAULT_YAW
+      smoothPitch.current = 0
+      camera.quaternion.setFromEuler(_euler.set(0, DEFAULT_YAW, 0))
+    },
+  }))
 
   const applyDolly = useCallback((deltaY: number) => {
     const body = bodyRef.current
@@ -174,7 +182,7 @@ export const CharacterController = forwardRef<CharacterControllerHandle>(
   return (
     <RigidBody
       ref={bodyRef}
-      position={[0, 1, 0]}
+      position={CHARACTER_SPAWN_POSITION}
       enabledRotations={[false, false, false]}
       linearDamping={8}
     >

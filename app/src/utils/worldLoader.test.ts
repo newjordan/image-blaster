@@ -58,30 +58,12 @@ describe('worldLoader', () => {
     expect(url).toBe('https://cdn.example.com/splat_full.spz')
   })
 
-  it('getSplatUrl prefers 100k for low quality', () => {
-    const world = {
-      ...exampleEntry.world,
-      assets: {
-        ...exampleEntry.world.assets,
-        splats: {
-          ...exampleEntry.world.assets.splats,
-          spz_urls: {
-            ...exampleEntry.world.assets.splats.spz_urls,
-            '100k': 'https://cdn.example.com/splat_100k.spz',
-          },
-        },
-      },
-    }
-    const url = getSplatUrl(world, ViewerQuality.Low)
-    expect(url).toBe('https://cdn.example.com/splat_100k.spz')
-  })
-
-  it('getSplatUrl prefers 500k for medium quality', () => {
-    const url = getSplatUrl(exampleEntry.world, ViewerQuality.Medium)
+  it('getSplatUrl prefers 500k for low quality', () => {
+    const url = getSplatUrl(exampleEntry.world, ViewerQuality.Low)
     expect(url).toBe('https://cdn.example.com/splat_500k.spz')
   })
 
-  it('getSplatUrl falls back to 150k when 500k absent', () => {
+  it('getSplatUrl falls back to 150k for low quality when 500k absent', () => {
     const world = {
       ...exampleEntry.world,
       assets: {
@@ -92,6 +74,21 @@ describe('worldLoader', () => {
         },
       },
     }
-    expect(getSplatUrl(world, ViewerQuality.Medium)).toBe('https://cdn.example.com/splat_150k.spz')
+    const url = getSplatUrl(world, ViewerQuality.Low)
+    expect(url).toBe('https://cdn.example.com/splat_150k.spz')
+  })
+
+  it('getSplatUrl falls back to 100k for low quality when 500k and 150k are absent', () => {
+    const world = {
+      ...exampleEntry.world,
+      assets: {
+        ...exampleEntry.world.assets,
+        splats: {
+          ...exampleEntry.world.assets.splats,
+          spz_urls: { '100k': 'https://cdn.example.com/splat_100k.spz' },
+        },
+      },
+    }
+    expect(getSplatUrl(world, ViewerQuality.Low)).toBe('https://cdn.example.com/splat_100k.spz')
   })
 })

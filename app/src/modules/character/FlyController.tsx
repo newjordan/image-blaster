@@ -12,6 +12,8 @@ const SPEED = 6
 const SHIFT_MULT = 3
 const SMOOTH = 0.12
 const DOLLY_UNITS_PER_PIXEL = 0.02
+const CHARACTER_SPAWN = new THREE.Vector3(0, 1, 0.5)
+const DEFAULT_YAW = 0
 
 const _forward = new THREE.Vector3()
 const _dollyForward = new THREE.Vector3()
@@ -29,14 +31,14 @@ export const FlyController = forwardRef<FlyControllerHandle>(function FlyControl
   const smoothPitch = useRef(0)
 
   const reset = useCallback(() => {
-    camera.position.set(0, 1, 0)
+    camera.position.copy(CHARACTER_SPAWN)
     cameraFocusTarget.current = null
     keys.current.clear()
-    rawYaw.current = 0
+    rawYaw.current = DEFAULT_YAW
     rawPitch.current = 0
-    smoothYaw.current = 0
+    smoothYaw.current = DEFAULT_YAW
     smoothPitch.current = 0
-    camera.quaternion.setFromEuler(_euler.set(0, 0, 0))
+    camera.quaternion.setFromEuler(_euler.set(0, DEFAULT_YAW, 0))
   }, [camera])
 
   const applyDolly = useCallback((deltaY: number) => {
