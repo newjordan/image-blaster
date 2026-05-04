@@ -11,7 +11,7 @@
           '-....-'
 ```
 
-`image-blaster` is a harness for creating derivative assets from images.
+`image-blaster` is a `claude code` that can create 3D/2D/SFX/video assets from images.
 
 ## Quickstart
 
@@ -23,13 +23,25 @@
 
 ## Description
 
-From your input image, `image-blaster` will create 3D models and environment, ambient sounds, object specific sfx, and lighting.
+By default `image-blaster` will use your input image to create:
 
-Video game level concepts? `IMAGE-BLAST` it.
-Your childhood bedroom? `IMAGE-BLAST` it.
-A film location scout? `IMAGE-BLAST` it.
-An architectural rendering? `IMAGE-BLAST` it.
-A photograph of your favourite coordinate on earth? `IMAGE-BLAST` it.
+1. 3D models (`.glb`, `.obj`) of all *dynamic* objects
+2. A gaussian splat (`.spz`) of the *static* environment,
+3. Ambient looping sound and object specific physics SFX (`.mp3`)
+
+## Extensions
+
+You can embed `image-blaster` under the assets of ***any game engine, DCC software, or web app***.
+
+1. Unity, Unreal, or Godot game engine
+2. Blender, 3DS Max, or Maya or other DCC software
+3. Three.js web app or Electron app
+
+- Video game level concepts? `IMAGE-BLAST` it.
+- Your childhood bedroom? `IMAGE-BLAST` it.
+- Need an environment for a robot? `IMAGE-BLAST` it.
+- A film location scout? `IMAGE-BLAST` it.
+- An architectural rendering? `IMAGE-BLAST` it.
 
 ## Advanced
 

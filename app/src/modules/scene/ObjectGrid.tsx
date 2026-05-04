@@ -1,4 +1,4 @@
-import { createRef, useCallback, useEffect, useRef, useState, type RefObject } from 'react'
+import { Component, createRef, useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { RigidBody, type RapierRigidBody } from '@react-three/rapier'
 import * as THREE from 'three'
@@ -21,6 +21,39 @@ interface SpawnedObject {
 
 interface Props {
   objects: WorldObjectAsset[]
+}
+
+interface ObjectLoadErrorBoundaryProps {
+  objectName: string
+  resetKey: string
+  children: ReactNode
+}
+
+interface ObjectLoadErrorBoundaryState {
+  hasError: boolean
+}
+
+class ObjectLoadErrorBoundary extends Component<ObjectLoadErrorBoundaryProps, ObjectLoadErrorBoundaryState> {
+  state: ObjectLoadErrorBoundaryState = { hasError: false }
+
+  static getDerivedStateFromError(): ObjectLoadErrorBoundaryState {
+    return { hasError: true }
+  }
+
+  componentDidCatch(error: unknown) {
+    console.warn(`Skipping object "${this.props.objectName}" because it failed to load.`, error)
+  }
+
+  componentDidUpdate(prevProps: ObjectLoadErrorBoundaryProps) {
+    if (prevProps.resetKey !== this.props.resetKey && this.state.hasError) {
+      this.setState({ hasError: false })
+    }
+  }
+
+  render() {
+    if (this.state.hasError) return null
+    return this.props.children
+  }
 }
 
 function gridPosition(index: number, total: number): [number, number, number] {
@@ -185,30 +218,30 @@ export function ObjectGrid({ objects }: Props) {
         <meshBasicMaterial color={0xffffff} depthTest={false} />
       </mesh>
       {objects.map((object, index) => (
-        <SceneObject
-          key={object.id}
-          ref={getObjectRef(object.id)}
-          object={object}
-          position={gridPosition(index, objects.length)}
-          renderMode={objectRenderMode}
-          isHovered={hoveredObjectId === object.id}
-          onHover={handleHover}
-
-          onPointerDown={(event) => onPointerDown(object.id, event)}
-        />
+        <ObjectLoadErrorBoundary key={object.id} objectName={object.name} resetKey={object.url}>
+          <SceneObject
+            ref={getObjectRef(object.id)}
+            object={object}
+            position={gridPosition(index, objects.length)}
+            renderMode={objectRenderMode}
+            isHovered={hoveredObjectId === object.id}
+            onHover={handleHover}
+            onPointerDown={(event) => onPointerDown(object.id, event)}
+          />
+        </ObjectLoadErrorBoundary>
       ))}
       {spawnedObjects.map((spawned) => (
-        <SceneObject
-          key={spawned.instanceId}
-          ref={getObjectRef(spawned.instanceId)}
-          object={{ ...spawned.asset, id: spawned.instanceId }}
-          position={spawned.position}
-          renderMode={objectRenderMode}
-          isHovered={hoveredObjectId === spawned.instanceId}
-          onHover={handleHover}
-
-          onPointerDown={(event) => onPointerDown(spawned.instanceId, event)}
-        />
+        <ObjectLoadErrorBoundary key={spawned.instanceId} objectName={spawned.asset.name} resetKey={spawned.asset.url}>
+          <SceneObject
+            ref={getObjectRef(spawned.instanceId)}
+            object={{ ...spawned.asset, id: spawned.instanceId }}
+            position={spawned.position}
+            renderMode={objectRenderMode}
+            isHovered={hoveredObjectId === spawned.instanceId}
+            onHover={handleHover}
+            onPointerDown={(event) => onPointerDown(spawned.instanceId, event)}
+          />
+        </ObjectLoadErrorBoundary>
       ))}
     </>
   )

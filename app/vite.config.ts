@@ -115,11 +115,23 @@ function worldsPlugin(): Plugin {
         '.json': 'application/json',
       }
       server.middlewares.use('/worlds', (req, res, next) => {
-        const filePath = path.join(worldsDir, decodeURIComponent(req.url || '/'))
+        const requestPath = decodeURIComponent((req.url || '/').split('?')[0])
+        const filePath = path.resolve(worldsDir, `.${requestPath}`)
+        const isInsideWorlds = filePath === worldsDir || filePath.startsWith(`${worldsDir}${path.sep}`)
+
+        if (!isInsideWorlds) {
+          res.statusCode = 404
+          res.end('Not found')
+          return
+        }
+
         if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
           const ext = path.extname(filePath).toLowerCase()
           res.setHeader('Content-Type', MIME[ext] ?? 'application/octet-stream')
           fs.createReadStream(filePath).pipe(res)
+        } else if (path.extname(requestPath)) {
+          res.statusCode = 404
+          res.end('Not found')
         } else {
           next()
         }

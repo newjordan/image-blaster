@@ -134,7 +134,13 @@ export const SplatRenderer = forwardRef<SplatRendererHandle, Props>(
         url,
         objectModifier: modifier,
         onLoad: (mesh: SplatMesh) => {
-          const box = mesh.getBoundingBox(true)
+          let box: ReturnType<SplatMesh['getBoundingBox']>
+          try {
+            box = mesh.getBoundingBox(true)
+          } catch (error) {
+            console.warn('Could not compute splat reveal bounds.', error)
+            return
+          }
           if (box.isEmpty()) return
           yMinFloat.value = box.min.y
           yMaxFloat.value = box.max.y

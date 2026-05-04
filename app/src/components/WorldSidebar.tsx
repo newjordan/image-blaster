@@ -11,7 +11,6 @@ interface Props {
 function IconTile({
   thumbnailUrl,
   alt,
-  children,
 }: {
   thumbnailUrl?: string
   alt: string
