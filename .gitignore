@@ -3,7 +3,6 @@ worlds/*
 !worlds/.gitkeep
 
 # Input staging area
-input/
 input/*
 !input/.gitkeep
 
