@@ -21,6 +21,7 @@ export function createDefaultPlacements(objects: WorldObjectAsset[]): WorldObjec
     instanceId: object.id,
     objectId: object.id,
     assetId: object.assetId,
+    physics: 'rigidbody',
     position: gridPosition(index, objects.length),
     rotation: [0, 0, 0],
     scale: [1, 1, 1],

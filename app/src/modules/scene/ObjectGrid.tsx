@@ -2,7 +2,7 @@ import { Component, createRef, useCallback, useEffect, useLayoutEffect, useMemo,
 import { useFrame, useThree } from '@react-three/fiber'
 import { RigidBody, type RapierRigidBody } from '@react-three/rapier'
 import * as THREE from 'three'
-import type { WorldObjectAsset, WorldObjectPlacement } from '../../types/world'
+import type { WorldObjectAsset, WorldObjectPhysics, WorldObjectPlacement } from '../../types/world'
 import { useDebugStore } from '../../store/debug'
 import { SceneObject, type SceneObjectHandle } from './SceneObject'
 import { useObjectGrab } from './useObjectGrab'
@@ -25,6 +25,7 @@ interface RenderedObject {
   position: [number, number, number]
   rotation: [number, number, number]
   scale: [number, number, number]
+  physics: WorldObjectPhysics
 }
 
 interface Props {
@@ -85,7 +86,14 @@ function resolveRenderedObjects(objects: WorldObjectAsset[], placements?: WorldO
   return getInitialPlacements(objects, placements).flatMap((placement) => {
     const asset = assetsById.get(placement.assetId ?? placement.objectId) ?? assetsById.get(placement.objectId)
     if (!asset) return []
-    return [{ instanceId: placement.instanceId, asset, position: placement.position, rotation: placement.rotation, scale: placement.scale }]
+    return [{
+      instanceId: placement.instanceId,
+      asset,
+      position: placement.position,
+      rotation: placement.rotation,
+      scale: placement.scale,
+      physics: placement.physics ?? 'rigidbody',
+    }]
   })
 }
 
@@ -202,11 +210,13 @@ export function ObjectGrid({ objects, placements }: Props) {
   }, [])
 
   useEffect(() => {
-    gl.domElement.style.cursor = activeObjectId ? 'move' : hoveredObjectId ? 'grab' : ''
+    const hoveredObject = hoveredObjectId ? renderedObjects.find((object) => object.instanceId === hoveredObjectId) : undefined
+    const canGrabHovered = !hoveredObject || hoveredObject.physics !== 'static'
+    gl.domElement.style.cursor = activeObjectId ? 'move' : hoveredObjectId && canGrabHovered ? 'grab' : ''
     return () => {
       gl.domElement.style.cursor = ''
     }
-  }, [activeObjectId, gl.domElement, hoveredObjectId])
+  }, [activeObjectId, gl.domElement, hoveredObjectId, renderedObjects])
 
   useFrame(() => {
     const id = pendingFocusId.current
@@ -235,19 +245,20 @@ export function ObjectGrid({ objects, placements }: Props) {
   return (
     <>
       <RigidBody ref={anchorRef} type="kinematicPosition" colliders={false} position={[0, -1000, 0]} />
-      <mesh ref={anchorSphereRef} visible={false}>
+      <mesh ref={anchorSphereRef} visible={false} renderOrder={10000}>
         <sphereGeometry args={[0.025, 10, 10]} />
-        <meshBasicMaterial color={0xffffff} depthTest={false} />
+        <meshBasicMaterial color={0xffffff} depthTest={false} depthWrite={false} toneMapped={false} transparent />
       </mesh>
       {renderedObjects.map((object) => (
         <ObjectLoadErrorBoundary key={`${object.instanceId}:${object.asset.assetId}:${object.asset.url}`} objectName={object.asset.name} resetKey={object.asset.url}>
           <SceneObject
             ref={getObjectRef(object.instanceId)}
-            key={`${object.instanceId}:${object.asset.assetId}:${object.position.join(',')}:${object.rotation.join(',')}:${object.scale.join(',')}`}
+            key={`${object.instanceId}:${object.asset.assetId}:${object.position.join(',')}:${object.rotation.join(',')}:${object.scale.join(',')}:${object.physics}`}
             object={{ ...object.asset, id: object.instanceId }}
             position={object.position}
             rotation={object.rotation}
             scale={object.scale}
+            physics={object.physics}
             renderMode={objectRenderMode}
             isHovered={hoveredObjectId === object.instanceId}
             onHover={handleHover}

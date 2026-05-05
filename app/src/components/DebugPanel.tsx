@@ -76,7 +76,7 @@ function dumpParams() {
   out.worldRenderMode = debug.worldRenderMode
   out.objectRenderMode = debug.objectRenderMode
 
-  if (debug.controllerMode === 'butterfly') {
+  if (debug.butterfliesEnabled) {
     const bf = useButterflyStore.getState()
     const butterfly: Record<string, unknown> = {}
     for (const k of Object.keys(DEFAULT_PARAMS) as Array<keyof ButterflyParams>) {
@@ -97,6 +97,8 @@ function dumpParams() {
 export function DebugPanel() {
   const showOrigin = useDebugStore((s) => s.showOrigin)
   const setShowOrigin = useDebugStore((s) => s.setShowOrigin)
+  const butterfliesEnabled = useDebugStore((s) => s.butterfliesEnabled)
+  const setButterfliesEnabled = useDebugStore((s) => s.setButterfliesEnabled)
   const controllerMode = useDebugStore((s) => s.controllerMode)
   const setControllerMode = useDebugStore((s) => s.setControllerMode)
   const flyMouseSensitivity = useDebugStore((s) => s.flyMouseSensitivity)
@@ -142,6 +144,11 @@ export function DebugPanel() {
         value: showOrigin,
         label: 'Show Origin',
         onChange: setShowOrigin,
+      },
+      butterfliesEnabled: {
+        value: butterfliesEnabled,
+        label: 'Butterflies',
+        onChange: setButterfliesEnabled,
       },
     }),
     'Splat DoF': folder({
@@ -208,7 +215,7 @@ export function DebugPanel() {
       bloomThreshold: {
         value: bloomThreshold,
         min: 0,
-        max: 1,
+        max: 5,
         step: 0.01,
         label: 'Bloom Threshold',
         onChange: setBloomThreshold,
@@ -265,7 +272,7 @@ export function DebugPanel() {
     }),
     controllerMode: {
       value: controllerMode,
-      options: { Fly: 'fly', FPS: 'fps', Butterfly: 'butterfly' },
+      options: { Fly: 'fly', FPS: 'fps' },
       label: 'Controller',
       onChange: (v: string) => setControllerMode(v as typeof controllerMode),
     },
@@ -279,7 +286,7 @@ export function DebugPanel() {
     },
   })
 
-  return controllerMode === 'butterfly' ? <ButterflyLevaBridge /> : null
+  return butterfliesEnabled ? <ButterflyLevaBridge /> : null
 }
 
 function ButterflyLevaBridge() {

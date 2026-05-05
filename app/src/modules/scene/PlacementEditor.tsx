@@ -23,11 +23,14 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js'
 import { AppButton } from '../../components/AppButton'
 import { ChromePanel, ChromeThumbnail, chrome } from '../../components/AppChrome'
-import { ObjectRenderMode, type WorldObjectAsset, type WorldObjectPlacement, type WorldSceneProject } from '../../types/world'
+import { ObjectRenderMode, type WorldObjectAsset, type WorldObjectPhysics, type WorldObjectPlacement, type WorldSceneProject } from '../../types/world'
 import { OBJECT_SCALE } from './SceneObject'
 import { getInitialPlacements } from './placements'
+import { DROP_TARGET_LAYER } from './dropTargets'
 
 export type TransformMode = 'translate' | 'rotate' | 'scale'
+type TransformField = 'position' | 'rotation' | 'scale'
+type TransformAxis = 0 | 1 | 2
 
 interface EditorStateArgs {
   slug: string
@@ -83,8 +86,10 @@ export interface PlacementEditorController {
   deleteSelected: () => void
   deleteInstance: (instanceId: string) => void
   addAsset: (asset: WorldObjectAsset) => void
-  dropRequestToken: number
   dropSelectedToFloor: () => void
+  setDropSelectedToFloorHandler: (handler: (() => void) | null) => void
+  updateSelectedTransform: (field: TransformField, axis: TransformAxis, value: number) => void
+  updateSelectedPhysics: (physics: WorldObjectPhysics) => void
   undo: () => void
   redo: () => void
   resetEdits: () => void
@@ -95,12 +100,24 @@ export interface PlacementEditorController {
 
 const HISTORY_LIMIT = 80
 const PASTE_OFFSET: [number, number, number] = [0.25, 0, 0.25]
+const ROTATION_SNAP_DEGREES = 5
 const projectVersion = 1
 const ignoreRaycast: THREE.Object3D['raycast'] = () => {}
+const TRANSFORM_FIELDS: Array<{ field: TransformField; label: string; step: number }> = [
+  { field: 'position', label: 'Pos', step: 0.01 },
+  { field: 'rotation', label: 'Rot', step: ROTATION_SNAP_DEGREES },
+  { field: 'scale', label: 'Scale', step: 0.01 },
+]
+const TRANSFORM_AXES: Array<{ axis: TransformAxis; label: string }> = [
+  { axis: 0, label: 'X' },
+  { axis: 1, label: 'Y' },
+  { axis: 2, label: 'Z' },
+]
 
 function clonePlacements(instances: WorldObjectPlacement[]): WorldObjectPlacement[] {
   return instances.map((instance) => ({
     ...instance,
+    physics: instance.physics ?? 'rigidbody',
     position: [...instance.position],
     rotation: [...instance.rotation],
     scale: [...instance.scale],
@@ -200,13 +217,36 @@ function EditableObject({
   )
 }
 
+function formatTransformValue(value: number) {
+  return Number.isFinite(value) ? Number(value.toFixed(3)).toString() : '0'
+}
+
+function transformInputValue(field: TransformField, value: number) {
+  const displayValue = field === 'rotation' ? THREE.MathUtils.radToDeg(value) : value
+  return formatTransformValue(displayValue)
+}
+
+function transformPlacementValue(field: TransformField, value: number) {
+  return field === 'rotation' ? THREE.MathUtils.degToRad(value) : value
+}
+
+function snapTransformInputValue(field: TransformField, value: number) {
+  if (field !== 'rotation') return value
+  return Math.round(value / ROTATION_SNAP_DEGREES) * ROTATION_SNAP_DEGREES
+}
+
+function blurEditableTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement)) return false
+  target.blur()
+  return true
+}
+
 export function usePlacementEditor({ slug, objects, allObjectAssets, sceneProject, sceneProjectReady, editing, onProjectSaved }: EditorStateArgs): PlacementEditorController {
   const initialPlacements = useMemo(
     () => getInitialPlacements(objects, sceneProject?.instances),
     [objects, sceneProject],
   )
   const [assetFilter, setAssetFilter] = useState<'world' | 'all'>('world')
-  const [dropRequestToken, setDropRequestToken] = useState(0)
   const visibleAssetLibrary = assetFilter === 'world'
     ? allObjectAssets.filter((asset) => asset.sourceWorldSlug === slug)
     : allObjectAssets
@@ -226,6 +266,7 @@ export function usePlacementEditor({ slug, objects, allObjectAssets, sceneProjec
   const loadedSlugRef = useRef(slug)
   const selectedIdRef = useRef(selectedId)
   const instancesRef = useRef(instances)
+  const dropSelectedToFloorHandlerRef = useRef<(() => void) | null>(null)
 
   const selectedInstance = useMemo(
     () => instances.find((instance) => instance.instanceId === selectedId),
@@ -344,6 +385,7 @@ export function usePlacementEditor({ slug, objects, allObjectAssets, sceneProjec
       instanceId: makeInstanceId(assetKey(asset)),
       objectId: asset.id,
       assetId: assetKey(asset),
+      physics: 'rigidbody',
       position: [0, 0, 0.5],
       rotation: [0, 0, 0],
       scale: [1, 1, 1],
@@ -354,8 +396,34 @@ export function usePlacementEditor({ slug, objects, allObjectAssets, sceneProjec
 
   const dropSelectedToFloor = useCallback(() => {
     if (!selectedIdRef.current) return
-    setDropRequestToken((token) => token + 1)
+    dropSelectedToFloorHandlerRef.current?.()
   }, [])
+
+  const setDropSelectedToFloorHandler = useCallback((handler: (() => void) | null) => {
+    dropSelectedToFloorHandlerRef.current = handler
+  }, [])
+
+  const updateSelectedTransform = useCallback((field: TransformField, axis: TransformAxis, value: number) => {
+    if (!Number.isFinite(value)) return
+    const selected = selectedIdRef.current
+    if (!selected) return
+
+    updateInstances((current) => current.map((instance) => {
+      if (instance.instanceId !== selected) return instance
+      const nextValue = [...instance[field]] as [number, number, number]
+      nextValue[axis] = value
+      return { ...instance, [field]: nextValue }
+    }))
+  }, [updateInstances])
+
+  const updateSelectedPhysics = useCallback((physics: WorldObjectPhysics) => {
+    const selected = selectedIdRef.current
+    if (!selected) return
+
+    updateInstances((current) => current.map((instance) => (
+      instance.instanceId === selected ? { ...instance, physics } : instance
+    )))
+  }, [updateInstances])
 
   const undo = useCallback(() => {
     const snapshot = historyRef.current.past[historyRef.current.past.length - 1]
@@ -442,7 +510,14 @@ export function usePlacementEditor({ slug, objects, allObjectAssets, sceneProjec
     if (!editing) return
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target
-      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) return
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) {
+        if (event.key === 'Escape') {
+          event.preventDefault()
+          event.stopPropagation()
+          target.blur()
+        }
+        return
+      }
       const mod = event.metaKey || event.ctrlKey
 
       if (mod && event.key.toLowerCase() === 'z' && event.shiftKey) {
@@ -515,8 +590,10 @@ export function usePlacementEditor({ slug, objects, allObjectAssets, sceneProjec
     deleteSelected,
     deleteInstance,
     addAsset,
-    dropRequestToken,
     dropSelectedToFloor,
+    setDropSelectedToFloorHandler,
+    updateSelectedTransform,
+    updateSelectedPhysics,
     undo,
     redo,
     resetEdits,
@@ -581,6 +658,11 @@ export function PlacementEditorScene({ controller, renderMode }: PlacementEditor
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
+      if (blurEditableTarget(event.target)) {
+        event.preventDefault()
+        event.stopPropagation()
+        return
+      }
 
       const dragStart = dragStartRef.current
       const object = selectedObjectRef.current
@@ -604,9 +686,9 @@ export function PlacementEditorScene({ controller, renderMode }: PlacementEditor
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [controller])
 
-  useEffect(() => {
+  const dropSelectedToFloor = useCallback(() => {
     const selected = controller.selectedInstance
-    if (controller.dropRequestToken === 0 || !selected) return
+    if (!selected) return
     const selectedGroup = selectedObjectRef.current
     const isSelectedObject = (object: THREE.Object3D) => {
       let current: THREE.Object3D | null = object
@@ -616,19 +698,26 @@ export function PlacementEditorScene({ controller, renderMode }: PlacementEditor
       }
       return false
     }
+    const origin = new THREE.Vector3(...selected.position).add(new THREE.Vector3(0, 50, 0))
+    const raycaster = raycasterRef.current
+    raycaster.layers.set(DROP_TARGET_LAYER)
+    raycaster.set(origin, new THREE.Vector3(0, -1, 0))
+    const hit = raycaster
+      .intersectObjects(scene.children, true)
+      .find((intersection) => !isSelectedObject(intersection.object) && intersection.point.y <= origin.y)
+    if (!hit) return
+
     const next = controller.instances.map((instance) => {
       if (instance.instanceId !== selected.instanceId) return instance
-      const origin = new THREE.Vector3(...instance.position).add(new THREE.Vector3(0, 50, 0))
-      const raycaster = raycasterRef.current
-      raycaster.set(origin, new THREE.Vector3(0, -1, 0))
-      const hit = raycaster
-        .intersectObjects(scene.children, true)
-        .find((intersection) => !isSelectedObject(intersection.object) && intersection.point.y <= origin.y)
-      const floorY = hit?.point.y ?? 0
-      return { ...instance, position: [instance.position[0], floorY, instance.position[2]] as [number, number, number] }
+      return { ...instance, position: [instance.position[0], hit.point.y, instance.position[2]] as [number, number, number] }
     })
     controller.commitInstances(next)
-  }, [controller.dropRequestToken, controller])
+  }, [controller, scene.children])
+
+  useEffect(() => {
+    controller.setDropSelectedToFloorHandler(dropSelectedToFloor)
+    return () => controller.setDropSelectedToFloorHandler(null)
+  }, [controller, dropSelectedToFloor])
 
   return (
     <>
@@ -663,7 +752,13 @@ export function PlacementEditorScene({ controller, renderMode }: PlacementEditor
               }}
             />
             {selectedObject && (
-              <TransformControls ref={transformRef} object={selectedObject} mode={controller.mode} space="local" />
+              <TransformControls
+                ref={transformRef}
+                object={selectedObject}
+                mode={controller.mode}
+                space="local"
+                rotationSnap={THREE.MathUtils.degToRad(ROTATION_SNAP_DEGREES)}
+              />
             )}
           </>
         )}
@@ -674,6 +769,10 @@ export function PlacementEditorScene({ controller, renderMode }: PlacementEditor
 
 export function PlacementEditorOverlay({ controller }: PlacementEditorOverlayProps) {
   const [, navigate] = useLocation()
+  const selectedInstance = controller.selectedInstance
+  const selectedAsset = selectedInstance
+    ? controller.assetsById.get(placementAssetKey(selectedInstance)) ?? controller.assetsById.get(selectedInstance.objectId)
+    : undefined
 
   return (
     <div className="pointer-events-none fixed inset-0 z-20 text-sm text-white">
@@ -702,7 +801,65 @@ export function PlacementEditorOverlay({ controller }: PlacementEditorOverlayPro
           <CornersOut size={15} weight="regular" />
           Scale
         </AppButton>
+        <AppButton
+          className="justify-center"
+          disabled={!controller.selectedId}
+          onClick={controller.dropSelectedToFloor}
+          aria-label="Drop selected object to floor"
+          title="Drop to floor"
+        >
+          <ArrowDown size={15} weight="regular" />
+          Drop
+        </AppButton>
       </div>
+
+      {selectedInstance && (
+        <ChromePanel className="pointer-events-auto fixed right-4 top-4 w-72 p-2">
+          <div className="mb-2 min-w-0">
+            <div className="truncate text-xs font-medium text-white/90">{selectedAsset?.name ?? selectedInstance.objectId}</div>
+            <div className="truncate text-[10px] text-white/35">{selectedInstance.instanceId}</div>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="grid grid-cols-[2.75rem_1fr] items-center gap-1">
+              <span className="text-[10px] uppercase tracking-[0.16em] text-white/40">Physics</span>
+              <select
+                value={selectedInstance.physics ?? 'rigidbody'}
+                onChange={(event) => controller.updateSelectedPhysics(event.currentTarget.value as WorldObjectPhysics)}
+                className="h-7 rounded border border-white/10 bg-black/40 px-1.5 text-xs text-white/85"
+              >
+                <option value="rigidbody">Rigidbody</option>
+                <option value="static">Static</option>
+              </select>
+            </label>
+            {TRANSFORM_FIELDS.map(({ field, label, step }) => (
+              <div key={field} className="grid grid-cols-[2.75rem_repeat(3,minmax(0,1fr))] items-center gap-1">
+                <div className="text-[10px] uppercase tracking-[0.16em] text-white/40">{label}</div>
+                {TRANSFORM_AXES.map(({ axis, label: axisLabel }) => (
+                  <label key={`${field}-${axis}`} className="min-w-0">
+                    <span className="sr-only">{`${label} ${axisLabel}`}</span>
+                    <input
+                      type="number"
+                      step={step}
+                      value={transformInputValue(field, selectedInstance[field][axis])}
+                      onChange={(event) => controller.updateSelectedTransform(
+                        field,
+                        axis,
+                        transformPlacementValue(field, Number.parseFloat(event.currentTarget.value)),
+                      )}
+                      onBlur={(event) => {
+                        const value = Number.parseFloat(event.currentTarget.value)
+                        if (!Number.isFinite(value)) return
+                        controller.updateSelectedTransform(field, axis, transformPlacementValue(field, snapTransformInputValue(field, value)))
+                      }}
+                      className="h-7 w-full rounded border border-white/10 bg-black/40 px-1.5 text-right text-xs text-white/85"
+                    />
+                  </label>
+                ))}
+              </div>
+            ))}
+          </div>
+        </ChromePanel>
+      )}
 
       <div className={`${chrome.enter} fixed inset-y-4 left-4 flex w-[min(24rem,calc(100vw-2rem))] max-w-sm flex-col gap-2`}>
         <div className="flex min-h-0 flex-col gap-2">
@@ -755,15 +912,6 @@ export function PlacementEditorOverlay({ controller }: PlacementEditorOverlayPro
                   aria-label="Redo"
                 >
                   <ArrowUUpRight size={16} weight="regular" />
-                </AppButton>
-                <AppButton
-                  className="h-8 w-8 justify-center"
-                  disabled={!controller.selectedId}
-                  onClick={controller.dropSelectedToFloor}
-                  aria-label="Drop selected objects to floor"
-                  title="Drop to floor"
-                >
-                  <ArrowDown size={16} weight="regular" />
                 </AppButton>
               </div>
             </div>

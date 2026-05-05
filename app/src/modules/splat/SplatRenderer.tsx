@@ -41,8 +41,10 @@ export function SplatRenderer({
   metricScaleFactor = 1,
 }: Props) {
     const renderer = useThree((state) => state.gl)
+    const viewerQuality = useDebugStore((s) => s.viewerQuality)
     const splatRef = useRef<SplatMesh>(null)
     const sparkRef = useRef<SparkRenderer>(null)
+    const encodeLinear = viewerQuality === ViewerQuality.High
 
     // Patch the SparkRenderer's vertex shader once to add our custom CoC curve
     // and inject `sharpRange` / `falloffRate` uniforms.
@@ -86,7 +88,11 @@ export function SplatRenderer({
       if (sparkRef.current) sparkRef.current.raycast = ignoreRaycast
     }, [])
 
-    const sparkArgs = useMemo(() => ({ renderer, enableLod: true }), [renderer])
+    useEffect(() => {
+      if (sparkRef.current) sparkRef.current.encodeLinear = encodeLinear
+    }, [encodeLinear])
+
+    const sparkArgs = useMemo(() => ({ renderer, enableLod: true, encodeLinear }), [renderer, encodeLinear])
     const splatArgs = useMemo(
       () => ({
         url,

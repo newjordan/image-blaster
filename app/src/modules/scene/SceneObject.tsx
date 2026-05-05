@@ -5,7 +5,7 @@ import { CuboidCollider, RigidBody, type RapierRigidBody } from '@react-three/ra
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js'
-import { ObjectRenderMode, type WorldObjectAsset } from '../../types/world'
+import { ObjectRenderMode, type WorldObjectAsset, type WorldObjectPhysics } from '../../types/world'
 import { useAudioStore } from '../../store/audio'
 import { useAssetMaterials, SHADED_COLOR, HOVER_DIM_FACTOR } from './useAssetMaterials'
 
@@ -34,6 +34,7 @@ interface Props {
   position: [number, number, number]
   rotation?: [number, number, number]
   scale?: [number, number, number]
+  physics?: WorldObjectPhysics
   renderMode: ObjectRenderMode
   isHovered: boolean
   onHover: HoverHandler
@@ -69,6 +70,7 @@ export const SceneObject = forwardRef<SceneObjectHandle, Props>(function SceneOb
     position,
     rotation = [0, 0, 0],
     scale = [1, 1, 1],
+    physics = 'rigidbody',
     renderMode,
     isHovered,
     onHover,
@@ -86,6 +88,7 @@ export const SceneObject = forwardRef<SceneObjectHandle, Props>(function SceneOb
   const lastSfxIndexRef = useRef<number | null>(null)
   const muted = useAudioStore((s) => s.muted)
   const gltf = useLoader(GLTFLoader, object.url)
+  const isStatic = physics === 'static'
   const initialPosition = useMemo(() => new THREE.Vector3(...position), [position])
   const initialRotation = useMemo(() => new THREE.Quaternion().setFromEuler(new THREE.Euler(...rotation)), [rotation])
 
@@ -269,7 +272,7 @@ export const SceneObject = forwardRef<SceneObjectHandle, Props>(function SceneOb
   return (
     <RigidBody
       ref={rigidBodyRef}
-      type="dynamic"
+      type={isStatic ? 'fixed' : 'dynamic'}
       colliders={false}
       position={position}
       rotation={rotation}
@@ -307,7 +310,7 @@ export const SceneObject = forwardRef<SceneObjectHandle, Props>(function SceneOb
           if (event.button !== 0) return
           event.stopPropagation()
           playRandomSfx()
-          onPointerDown?.(event)
+          if (!isStatic) onPointerDown?.(event)
         }}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}

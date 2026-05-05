@@ -1,4 +1,4 @@
-import { forwardRef, useImperativeHandle, useMemo, useRef, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { useGLTF, useTexture, PositionalAudio } from '@react-three/drei'
 import { SkeletonUtils } from 'three-stdlib'
@@ -8,7 +8,12 @@ import { useAudioReady } from '../audio/useAudioReady'
 import { useAudioStore } from '../../store/audio'
 
 const GLB_URL = '/butterfly/butterfly-loop.glb'
-const TEX_URL = '/butterfly/butterfly.png'
+const TEX_URLS = [
+  '/butterfly/butterfly1.jpg',
+  '/butterfly/butterfly2.jpg',
+  '/butterfly/butterfly4.jpg',
+  '/butterfly/butterfly5.jpg',
+]
 const FLAP_URLS = Array.from({ length: 8 }, (_, i) => `/butterfly/sfx/moth-flap-${i + 1}.wav`)
 
 const MODEL_SCALE = 0.25
@@ -26,7 +31,8 @@ export const Butterfly = forwardRef<THREE.Group, Props>(function Butterfly(
 ) {
   const { scene, animations } = useGLTF(GLB_URL)
   const [scale] = useState(MODEL_SCALE * (Math.random() * 0.25 + 0.75))
-  const texture = useTexture(TEX_URL)
+  const [textureUrl] = useState(() => TEX_URLS[Math.floor(Math.random() * TEX_URLS.length)])
+  const texture = useTexture(textureUrl)
 
   const groupRef = useRef<THREE.Group>(null)
   useImperativeHandle(ref, () => groupRef.current as THREE.Group)
@@ -42,7 +48,7 @@ export const Butterfly = forwardRef<THREE.Group, Props>(function Butterfly(
   const smoothedSpeed = useRef(0)
   const seededRef = useRef(false)
 
-  const { clone, mixer, speedMul } = useMemo(() => {
+  const { clone, mixer, speedMul, material } = useMemo(() => {
     const cloned = SkeletonUtils.clone(scene) as THREE.Group
     const mat = new THREE.MeshStandardMaterial({
       map: texture,
@@ -64,8 +70,13 @@ export const Butterfly = forwardRef<THREE.Group, Props>(function Butterfly(
       action.play()
       m.update(Math.random() * clip.duration)
     }
-    return { clone: cloned, mixer: m, speedMul: 0.7 + Math.random() * 0.6 }
+    return { clone: cloned, mixer: m, speedMul: 0.7 + Math.random() * 0.6, material: mat }
   }, [scene, animations, texture])
+
+  useEffect(() => () => {
+    mixer.stopAllAction()
+    material.dispose()
+  }, [material, mixer])
 
   useFrame((_, dtRaw) => {
     const dt = Math.min(dtRaw, 0.05)
@@ -117,3 +128,4 @@ export const Butterfly = forwardRef<THREE.Group, Props>(function Butterfly(
 })
 
 useGLTF.preload(GLB_URL)
+TEX_URLS.forEach((url) => useTexture.preload(url))

@@ -7,7 +7,7 @@ import { WorldCollider } from '../modules/collider/WorldCollider'
 import { GroundPlane } from '../modules/collider/GroundPlane'
 import { CharacterController, type CharacterControllerHandle } from '../modules/character/CharacterController'
 import { FlyController, type FlyControllerHandle } from '../modules/character/FlyController'
-import { ButterflyController, type ButterflyControllerHandle } from '../modules/butterfly/ButterflyController'
+import { ButterflyScene } from '../modules/butterfly/ButterflyScene'
 import { ObjectGrid } from '../modules/scene/ObjectGrid'
 import { PlacementEditorOverlay, PlacementEditorScene, usePlacementEditor } from '../modules/scene/PlacementEditor'
 import { OriginHelper } from '../modules/scene/OriginHelper'
@@ -17,7 +17,7 @@ import { getSplatUrl } from '../utils/worldLoader'
 import { useDebugStore } from '../store/debug'
 import { WorldRenderMode, ObjectRenderMode, ViewerQuality, type World, type WorldObjectAsset, type WorldSceneProject } from '../types/world'
 
-type CharHandle = CharacterControllerHandle | ButterflyControllerHandle | FlyControllerHandle
+type CharHandle = CharacterControllerHandle | FlyControllerHandle
 
 interface Props {
   world: World
@@ -47,6 +47,7 @@ export function WorldViewer({
   const objectRenderMode = useDebugStore((s) => s.objectRenderMode)
   const viewerQuality = useDebugStore((s) => s.viewerQuality)
   const controllerMode = useDebugStore((s) => s.controllerMode)
+  const butterfliesEnabled = useDebugStore((s) => s.butterfliesEnabled)
   const controllerResetToken = useDebugStore((s) => s.controllerResetToken)
   const environmentIntensity = useDebugStore((s) => s.environmentIntensity)
   const sunIntensity = useDebugStore((s) => s.sunIntensity)
@@ -95,9 +96,7 @@ export function WorldViewer({
         <Suspense fallback={null}>
           <AudioManager urls={worldSfxUrls} />
           <Physics gravity={[0, -9.81, 0]}>
-            {controllerMode === 'butterfly' ? (
-              <ButterflyController ref={charRef as React.RefObject<ButterflyControllerHandle>} />
-            ) : controllerMode === 'fly' ? (
+            {controllerMode === 'fly' ? (
               <FlyController ref={charRef as React.RefObject<FlyControllerHandle>} />
             ) : (
               <CharacterController ref={charRef as React.RefObject<CharacterControllerHandle>} />
@@ -147,6 +146,7 @@ export function WorldViewer({
               <EnvironmentMap panoUrl={panoUrl} intensity={environmentIntensity} />
             </Suspense>
           )}
+          {butterfliesEnabled && <ButterflyScene />}
           <OriginHelper />
           {isHighQuality && <PostProcessing />}
         </Suspense>

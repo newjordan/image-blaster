@@ -24,6 +24,7 @@ function worldsPlugin(): Plugin {
   const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.avif'])
   const PROJECT_VERSION = 1
   const WORLD_SPZ_KEYS = new Set(['100k', '150k', '500k', 'full_res'])
+  let activeWorldSlug: string | null = null
 
   function visibleFiles(dir: string) {
     if (!fs.existsSync(dir)) return []
@@ -157,7 +158,7 @@ function worldsPlugin(): Plugin {
     const instances = record.instances.flatMap((instance): Array<Record<string, unknown>> => {
       if (!instance || typeof instance !== 'object') return []
       const item = instance as Record<string, unknown>
-      const { instanceId, objectId, assetId, position, rotation, scale } = item
+      const { instanceId, objectId, assetId, physics, position, rotation, scale } = item
       const isVec3 = (value: unknown): value is [number, number, number] => (
         Array.isArray(value) &&
         value.length === 3 &&
@@ -166,8 +167,9 @@ function worldsPlugin(): Plugin {
 
       if (typeof instanceId !== 'string' || typeof objectId !== 'string') return []
       if (assetId !== undefined && typeof assetId !== 'string') return []
+      if (physics !== undefined && physics !== 'rigidbody' && physics !== 'static') return []
       if (!isVec3(position) || !isVec3(rotation) || !isVec3(scale)) return []
-      return [{ instanceId, objectId, ...(assetId ? { assetId } : {}), position, rotation, scale }]
+      return [{ instanceId, objectId, ...(assetId ? { assetId } : {}), physics: physics ?? 'rigidbody', position, rotation, scale }]
     })
 
     return { version: PROJECT_VERSION, instances }
@@ -185,6 +187,19 @@ function worldsPlugin(): Plugin {
 
   function isSceneProjectFile(file: string) {
     return path.basename(file) === 'project.json' && path.basename(path.dirname(file)) === 'scene'
+  }
+
+  function isWorldCatalogFile(file: string) {
+    const relative = path.relative(worldsDir, file)
+    if (relative.startsWith('..') || path.isAbsolute(relative)) return false
+    const parts = relative.split(path.sep)
+    return parts.length === 4 && parts[1] === 'output' && parts[2] === 'world' && parts[3] === 'world.json'
+  }
+
+  function worldSlugForFile(file: string) {
+    const relative = path.relative(worldsDir, file)
+    if (relative.startsWith('..') || path.isAbsolute(relative)) return null
+    return relative.split(path.sep)[0] || null
   }
 
   function readWorlds() {
@@ -235,10 +250,16 @@ function worldsPlugin(): Plugin {
     },
     handleHotUpdate({ file, server }) {
       const RELOAD_EXTENSIONS = new Set(['.glb', '.spz', '.mp3', '.ogg', '.wav', '.m4a', '.opus', '.json'])
-      if (file.startsWith(worldsDir) && RELOAD_EXTENSIONS.has(path.extname(file).toLowerCase()) && !isSceneProjectFile(file)) {
+      const worldSlug = worldSlugForFile(file)
+      if (!worldSlug) return
+      const shouldReloadWorldsModule = RELOAD_EXTENSIONS.has(path.extname(file).toLowerCase()) && !isSceneProjectFile(file)
+      if (!shouldReloadWorldsModule) return
+      if (activeWorldSlug !== null && worldSlug !== activeWorldSlug && !isWorldCatalogFile(file)) return []
+      if (shouldReloadWorldsModule) {
         const mod = server.moduleGraph.getModuleById(RESOLVED_ID)
         if (mod) server.moduleGraph.invalidateModule(mod)
         server.ws.send({ type: 'full-reload' })
+        return []
       }
     },
     configureServer(server) {
@@ -260,6 +281,27 @@ function worldsPlugin(): Plugin {
         '.opus': 'audio/ogg',
         '.json': 'application/json',
       }
+      server.middlewares.use('/__active-world', (req, res) => {
+        const requestUrl = new URL(req.url || '/', 'http://localhost')
+        const slug = requestUrl.searchParams.get('slug')
+        if (!slug) {
+          res.statusCode = 400
+          res.end('Missing slug')
+          return
+        }
+
+        const worldDir = path.resolve(worldsDir, slug)
+        const isInsideWorlds = worldDir !== worldsDir && worldDir.startsWith(`${worldsDir}${path.sep}`)
+        if (!isInsideWorlds) {
+          res.statusCode = 400
+          res.end('Invalid slug')
+          return
+        }
+
+        activeWorldSlug = slug
+        res.statusCode = 204
+        res.end()
+      })
       server.middlewares.use('/__open-world-folder', (req, res) => {
         const requestUrl = new URL(req.url || '/', 'http://localhost')
         const slug = requestUrl.searchParams.get('slug')

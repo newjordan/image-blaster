@@ -2,19 +2,25 @@ import { useRef, useEffect, useState, forwardRef, useImperativeHandle, useCallba
 import { useFrame, useThree } from '@react-three/fiber'
 import { RigidBody, CapsuleCollider, useRapier } from '@react-three/rapier'
 import * as THREE from 'three'
-import { useCameraDollyGestures } from '../camera/useCameraDollyGestures'
+import { useCameraGestures } from '../camera/useCameraGestures'
+import { useDebugStore } from '../../store/debug'
 
 export interface CharacterControllerHandle {
   reset: () => void
 }
 
 const SPEED = 4
-const JUMP_FORCE = 6
-const SMOOTH = 0.12 // mouse smoothing factor (lower = smoother)
+const JUMP_VELOCITY = 5.5
+const MOUSE_SMOOTHING = 0.12
 const DOLLY_UNITS_PER_PIXEL = 0.01
-const CHARACTER_SPAWN = { x: 0, y: 1, z: -0.5 }
+const CHARACTER_HEIGHT = 1.6
+const CHARACTER_RADIUS = 0.25
+const CHARACTER_HALF_SEGMENT = CHARACTER_HEIGHT / 2 - CHARACTER_RADIUS
+const CAMERA_EYE_OFFSET = CHARACTER_HEIGHT / 2
+const GROUND_CHECK_DISTANCE = CAMERA_EYE_OFFSET + 0.08
+const CHARACTER_SPAWN = { x: 0, y: CAMERA_EYE_OFFSET, z: -0.5 }
 const CHARACTER_SPAWN_POSITION: [number, number, number] = [CHARACTER_SPAWN.x, CHARACTER_SPAWN.y, CHARACTER_SPAWN.z]
-const DEFAULT_YAW = Math.PI
+const DEFAULT_YAW = 0
 
 const _forward = new THREE.Vector3()
 const _right = new THREE.Vector3()
@@ -26,9 +32,11 @@ export const CharacterController = forwardRef<CharacterControllerHandle>(
   function CharacterController(_, ref) {
   const bodyRef = useRef<React.ComponentRef<typeof RigidBody>>(null)
   const { camera, gl } = useThree()
-  useRapier()
+  const mouseSensitivity = useDebugStore((s) => s.flyMouseSensitivity)
+  const { rapier, world } = useRapier()
 
   const keys = useRef(new Set<string>())
+  const jumpQueued = useRef(false)
   const rawYaw = useRef(DEFAULT_YAW)
   const rawPitch = useRef(0)
   const smoothYaw = useRef(DEFAULT_YAW)
@@ -47,6 +55,7 @@ export const CharacterController = forwardRef<CharacterControllerHandle>(
       rawPitch.current = 0
       smoothYaw.current = DEFAULT_YAW
       smoothPitch.current = 0
+      keys.current.clear()
       camera.quaternion.setFromEuler(_euler.set(0, DEFAULT_YAW, 0))
     },
   }))
@@ -72,12 +81,25 @@ export const CharacterController = forwardRef<CharacterControllerHandle>(
     body.wakeUp()
   }, [camera])
 
-  useCameraDollyGestures({ domElement: gl.domElement, onDollyPixels: applyDolly })
+  const applyLook = useCallback((dx: number, dy: number) => {
+    rawYaw.current -= dx * mouseSensitivity
+    rawPitch.current -= dy * mouseSensitivity
+    rawPitch.current = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, rawPitch.current))
+  }, [mouseSensitivity])
+
+  useCameraGestures({ domElement: gl.domElement, onDollyPixels: applyDolly, onTumblePixels: applyLook })
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.type === 'keydown') keys.current.add(e.code)
-      else keys.current.delete(e.code)
+      if (e.type === 'keydown') {
+        keys.current.add(e.code)
+        if (e.code === 'Space' && !e.repeat) {
+          jumpQueued.current = true
+          e.preventDefault()
+        }
+      } else {
+        keys.current.delete(e.code)
+      }
     }
     window.addEventListener('keydown', onKey)
     window.addEventListener('keyup', onKey)
@@ -131,14 +153,15 @@ export const CharacterController = forwardRef<CharacterControllerHandle>(
       gl.domElement.removeEventListener('touchmove', onTouchMove)
       gl.domElement.removeEventListener('touchend', onTouchEnd)
     }
-  }, [gl])
+  }, [gl.domElement])
 
-  useFrame(() => {
-    if (!bodyRef.current) return
+  useFrame((_state, delta) => {
+    const body = bodyRef.current
+    if (!body) return
 
-    // Smooth yaw/pitch
-    smoothYaw.current += (rawYaw.current - smoothYaw.current) * (1 - Math.pow(1 - SMOOTH, 1))
-    smoothPitch.current += (rawPitch.current - smoothPitch.current) * (1 - Math.pow(1 - SMOOTH, 1))
+    const smoothing = 1 - Math.pow(1 - MOUSE_SMOOTHING, delta * 60)
+    smoothYaw.current += (rawYaw.current - smoothYaw.current) * smoothing
+    smoothPitch.current += (rawPitch.current - smoothPitch.current) * smoothing
 
     _euler.set(smoothPitch.current, smoothYaw.current, 0)
     camera.quaternion.setFromEuler(_euler)
@@ -163,20 +186,23 @@ export const CharacterController = forwardRef<CharacterControllerHandle>(
     _move.set(0, 0, 0).addScaledVector(_forward, fwd).addScaledVector(_right, strafe)
     if (_move.lengthSq() > 1) _move.normalize()
 
-    const vel = bodyRef.current.linvel()
-    bodyRef.current.setLinvel(
-      { x: _move.x * SPEED, y: vel.y, z: _move.z * SPEED },
-      true,
-    )
-
-    // Jump
-    if ((keys.current.has('Space') || keys.current.has('KeyE')) && Math.abs(vel.y) < 0.1) {
-      bodyRef.current.applyImpulse({ x: 0, y: JUMP_FORCE, z: 0 }, true)
+    const vel = body.linvel()
+    let nextY = vel.y
+    if (jumpQueued.current) {
+      const pos = body.translation()
+      const ray = new rapier.Ray(
+        { x: pos.x, y: pos.y, z: pos.z },
+        { x: 0, y: -1, z: 0 },
+      )
+      const grounded = Boolean(world.castRay(ray, GROUND_CHECK_DISTANCE, true, undefined, undefined, undefined, body))
+      if (grounded) nextY = JUMP_VELOCITY
+      jumpQueued.current = false
     }
+    body.setLinvel({ x: _move.x * SPEED, y: nextY, z: _move.z * SPEED }, true)
 
     // Sync camera position to body
-    const pos = bodyRef.current.translation()
-    camera.position.set(pos.x, pos.y + 0.8, pos.z)
+    const pos = body.translation()
+    camera.position.set(pos.x, pos.y + CAMERA_EYE_OFFSET, pos.z)
   })
 
   return (
@@ -184,9 +210,9 @@ export const CharacterController = forwardRef<CharacterControllerHandle>(
       ref={bodyRef}
       position={CHARACTER_SPAWN_POSITION}
       enabledRotations={[false, false, false]}
-      linearDamping={8}
+      linearDamping={0}
     >
-      <CapsuleCollider args={[0.4, 0.4]} />
+      <CapsuleCollider args={[CHARACTER_HALF_SEGMENT, CHARACTER_RADIUS]} />
     </RigidBody>
   )
 })

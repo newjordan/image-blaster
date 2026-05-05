@@ -16,7 +16,9 @@ Per-image JSON and root `image.json` use the same flat schema. Do not write an `
 - Keep descriptions useful for generation prompts: subject, arrangement, material, color, shape, lighting, camera/view, and environmental effects.
 - If something is uncertain, do not make assumptions about it; describe only what is certain.
 - Deduplicate repeated objects. If many similar jars, rocks, chairs, or tools appear, represent them as one unique object with a `count_estimate`.
-- For objects, include only things that can be cleanly distinguished into rigid or mostly rigid objects. Avoid sky, fog, terrain, walls, floors, ceilings, whole buildings, and broad environment surfaces unless they are clearly standalone props.
+- For objects, include only single rigid or mostly rigid items that can be cleanly segmented as standalone assets.
+- Never group multiple different items into one object candidate, and never create compound assets such as "desk with items", "table setup", "shelf contents", "chair and pillow", or "tool pile". Split visible separable items into separate candidates. Err on letting the user decide which objects to include if you are unsure.
+- Avoid sky, fog, terrain, walls, floors, ceilings, whole buildings, and broad environment surfaces unless they are clearly standalone props that make sense as a rigidbody or static scene object.
 - Preserve stable object IDs if updating existing object directories.
 
 ## Shared JSON Shape
@@ -48,7 +50,6 @@ Use this exact flat shape for both `worlds/<slug>/source/<image-name>.json` and 
         {
           "image": "worlds/sterile-electronic-lab/source/example.png",
           "location_in_image": "inside glass cases along the back wall",
-          "separability": "clean"
         }
       ],
       "generate_as_3d_object": true

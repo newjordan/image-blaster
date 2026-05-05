@@ -40,11 +40,13 @@ export interface WorldObjectAsset {
 }
 
 export type Vec3Tuple = [number, number, number]
+export type WorldObjectPhysics = 'rigidbody' | 'static'
 
 export interface WorldObjectPlacement {
   instanceId: string
   objectId: string
   assetId?: string
+  physics?: WorldObjectPhysics
   position: Vec3Tuple
   rotation: Vec3Tuple
   scale: Vec3Tuple

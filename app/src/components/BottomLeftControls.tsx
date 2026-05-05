@@ -10,7 +10,7 @@ import {
 import { Tooltip } from '@radix-ui/themes'
 import { type ReactElement, useEffect } from 'react'
 import { useAudioStore } from '../store/audio'
-import { useDebugStore } from '../store/debug'
+import { type ControllerMode, useDebugStore } from '../store/debug'
 import { ObjectRenderMode, ViewerQuality, WorldRenderMode } from '../types/world'
 import { AppButton } from './AppButton'
 import { chrome } from './AppChrome'
@@ -31,6 +31,11 @@ const WORLD_MODES = [
   { mode: WorldRenderMode.SplatOnly, label: 'Scene' },
   { mode: WorldRenderMode.ObjectOnly, label: 'Objects' },
 ] as const
+
+const CONTROLLER_MODES: readonly { mode: ControllerMode; label: string }[] = [
+  { mode: 'fly', label: 'Fly' },
+  { mode: 'fps', label: 'FPS' },
+]
 
 function nextMode<T>(items: readonly { mode: T }[], current: T) {
   const index = items.findIndex((item) => item.mode === current)
@@ -55,6 +60,8 @@ export function BottomLeftControls() {
   const setObjectRenderMode = useDebugStore((s) => s.setObjectRenderMode)
   const worldRenderMode = useDebugStore((s) => s.worldRenderMode)
   const setWorldRenderMode = useDebugStore((s) => s.setWorldRenderMode)
+  const controllerMode = useDebugStore((s) => s.controllerMode)
+  const setControllerMode = useDebugStore((s) => s.setControllerMode)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -66,8 +73,8 @@ export function BottomLeftControls() {
         const quality = qualities[n]
         if (quality) setViewerQuality(quality)
       } else if (e.altKey) {
-        const worlds = [WorldRenderMode.Combined, WorldRenderMode.SplatOnly, WorldRenderMode.ObjectOnly]
-        setWorldRenderMode(worlds[n])
+        const objects = [ObjectRenderMode.Wireframe, ObjectRenderMode.ShadedWireframe, ObjectRenderMode.Lit]
+        setObjectRenderMode(objects[n])
       } else if (e.shiftKey) {
         const objects = [ObjectRenderMode.Wireframe, ObjectRenderMode.ShadedWireframe, ObjectRenderMode.Lit]
         setObjectRenderMode(objects[n])
@@ -75,7 +82,7 @@ export function BottomLeftControls() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [setObjectRenderMode, setWorldRenderMode, setViewerQuality])
+  }, [setObjectRenderMode, setViewerQuality])
 
   const utilBtn =
     'w-8 h-8 justify-center text-white rounded'
@@ -87,6 +94,7 @@ export function BottomLeftControls() {
 
   const currentQuality = QUALITY_MODES.find((item) => item.mode === viewerQuality) ?? QUALITY_MODES[0]
   const currentWorldMode = WORLD_MODES.find((item) => item.mode === worldRenderMode) ?? WORLD_MODES[0]
+  const currentControllerMode = CONTROLLER_MODES.find((item) => item.mode === controllerMode) ?? CONTROLLER_MODES[0]
 
   return (
     <div className={`${chrome.enter} ${chrome.bar} flex h-10 w-full items-center justify-center gap-1 px-2 sm:w-auto`}>
@@ -99,6 +107,19 @@ export function BottomLeftControls() {
       <ControlTooltip content={muted ? 'Unmute' : 'Mute'}>
         <AppButton onClick={toggleMuted} className={utilBtn}>
           {muted ? <SpeakerSlash size={18} weight="fill" /> : <SpeakerHigh size={18} weight="fill" />}
+        </AppButton>
+      </ControlTooltip>
+
+      <div className={`${chrome.divider} mx-1`} />
+
+      {/* controller mode */}
+      <ControlTooltip content="Change controller">
+        <AppButton
+          onClick={() => setControllerMode(nextMode(CONTROLLER_MODES, controllerMode))}
+          className={'w-24'}
+        >
+          <CameraIcon size={15} weight="regular" className="text-white/45 flex-shrink-0" />
+          <span>{currentControllerMode.label}</span>
         </AppButton>
       </ControlTooltip>
 

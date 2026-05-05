@@ -1,4 +1,4 @@
-import { Suspense, lazy } from 'react'
+import { Suspense, lazy, useEffect } from 'react'
 import { useRoute, useLocation, Redirect } from 'wouter'
 import { WorldViewer } from './components/WorldViewer'
 import { WorldSidebar } from './components/WorldSidebar'
@@ -34,8 +34,15 @@ export function App() {
   const slug = editParams?.slug ?? params?.slug ?? worlds[0].slug
   const entry = worlds.find((w) => w.slug === slug) ?? worlds[0]
   const editing = Boolean(editMatch)
-  const showLeva = import.meta.env.DEV && import.meta.env.VITE_SHOW_LEVA === 'true'
+  const showLeva = import.meta.env.VITE_SHOW_LEVA === 'true'
   const { sceneProject, sceneProjectReady, updateSceneProject } = useSceneProject(entry.slug, location, entry.sceneProject)
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return
+    fetch(`/__active-world?slug=${encodeURIComponent(entry.slug)}`).catch((error) => {
+      console.warn(`Could not update active world to "${entry.slug}".`, error)
+    })
+  }, [entry.slug])
 
   if (!editMatch && !match) {
     return <Redirect to={`/${worlds[0].slug}`} />

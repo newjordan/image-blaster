@@ -6,6 +6,7 @@ import * as THREE from 'three'
 import { useDebugStore } from '../../store/debug'
 import { ObjectRenderMode, WorldRenderMode } from '../../types/world'
 import { useAssetMaterials } from '../scene/useAssetMaterials'
+import { DROP_TARGET_LAYER } from '../scene/dropTargets'
 
 interface Props {
   url: string
@@ -26,10 +27,17 @@ export function WorldCollider({ url, flipY, groundPlaneOffset, metricScaleFactor
   const shadowMat = useMemo(() => new THREE.ShadowMaterial({ opacity: 0.8, transparent: true, depthWrite: false }), [])
   useEffect(() => () => shadowMat.dispose(), [shadowMat])
 
-  const { scene, overlayScene } = useMemo(() => ({
-    scene: cloneSkeleton(rawScene),
-    overlayScene: cloneSkeleton(rawScene),
-  }), [rawScene])
+  const { scene, overlayScene, dropTargetScene } = useMemo(() => {
+    const dropTargetScene = cloneSkeleton(rawScene)
+    dropTargetScene.traverse((child) => {
+      child.layers.set(DROP_TARGET_LAYER)
+    })
+    return {
+      scene: cloneSkeleton(rawScene),
+      overlayScene: cloneSkeleton(rawScene),
+      dropTargetScene,
+    }
+  }, [rawScene])
 
   const showMesh = worldRenderMode !== WorldRenderMode.ObjectOnly
 
@@ -61,11 +69,19 @@ export function WorldCollider({ url, flipY, groundPlaneOffset, metricScaleFactor
   }, [overlayScene, wireframeOverlayMaterial])
 
   return (
-    <RigidBody type="fixed" colliders="trimesh" rotation={[flipY ? Math.PI : 0, 0, 0]} position={[0, groundPlaneOffset ? groundPlaneOffset : 0, 0]} scale={[metricScaleFactor ? metricScaleFactor : 1, metricScaleFactor ? metricScaleFactor : 1, metricScaleFactor ? metricScaleFactor : 1]}>
-      <primitive object={scene} />
-      {objectRenderMode === ObjectRenderMode.ShadedWireframe && showMesh && (
-        <primitive object={overlayScene} />
-      )}
-    </RigidBody>
+    <>
+      <RigidBody type="fixed" colliders="trimesh" rotation={[flipY ? Math.PI : 0, 0, 0]} position={[0, groundPlaneOffset ? groundPlaneOffset : 0, 0]} scale={[metricScaleFactor ? metricScaleFactor : 1, metricScaleFactor ? metricScaleFactor : 1, metricScaleFactor ? metricScaleFactor : 1]}>
+        <primitive object={scene} />
+        {objectRenderMode === ObjectRenderMode.ShadedWireframe && showMesh && (
+          <primitive object={overlayScene} />
+        )}
+      </RigidBody>
+      <primitive
+        object={dropTargetScene}
+        rotation={[flipY ? Math.PI : 0, 0, 0]}
+        position={[0, groundPlaneOffset ? groundPlaneOffset : 0, 0]}
+        scale={[metricScaleFactor ? metricScaleFactor : 1, metricScaleFactor ? metricScaleFactor : 1, metricScaleFactor ? metricScaleFactor : 1]}
+      />
+    </>
   )
 }

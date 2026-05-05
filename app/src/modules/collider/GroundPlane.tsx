@@ -4,6 +4,7 @@ import * as THREE from 'three'
 import { useDebugStore } from '../../store/debug'
 import { ObjectRenderMode, WorldRenderMode } from '../../types/world'
 import { SHADED_COLOR } from '../scene/useAssetMaterials'
+import { DROP_TARGET_LAYER } from '../scene/dropTargets'
 
 const LARGE = 200
 const GRID_SIZE = 5
@@ -80,6 +81,13 @@ export function GroundPlane() {
       <RigidBody type="fixed">
         <CuboidCollider args={[LARGE / 2, FLOOR_THICKNESS, LARGE / 2]} position={[0, -FLOOR_THICKNESS, 0]} />
       </RigidBody>
+      <mesh
+        rotation={[-Math.PI / 2, 0, 0]}
+        onUpdate={(mesh) => mesh.layers.set(DROP_TARGET_LAYER)}
+      >
+        <planeGeometry args={[LARGE, LARGE]} />
+        <meshBasicMaterial colorWrite={false} depthWrite={false} />
+      </mesh>
 
       {/* physics safety net */}
       <RigidBody type="fixed" position={[0, -10, 0]}>

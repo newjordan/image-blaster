@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { FolderOpenIcon, ListIcon, PencilSimpleIcon, QuestionMarkIcon } from '@phosphor-icons/react'
+import { ButterflyIcon, FolderOpenIcon, ListIcon, PencilSimpleIcon, QuestionMarkIcon } from '@phosphor-icons/react'
 import { useLocation } from 'wouter'
 import type { WorldEntry, WorldSceneProject } from '../types/world'
+import { useDebugStore } from '../store/debug'
 import { AppButton } from './AppButton'
 import { ChromeThumbnail, chrome } from './AppChrome'
 
@@ -14,6 +15,8 @@ interface Props {
 export function WorldSidebar({ worlds, activeSlug, activeSceneProject }: Props) {
   const [, navigate] = useLocation()
   const [menuOpen, setMenuOpen] = useState(false)
+  const butterfliesEnabled = useDebugStore((s) => s.butterfliesEnabled)
+  const setButterfliesEnabled = useDebugStore((s) => s.setButterfliesEnabled)
   const canOpenLocalFolders = import.meta.env.DEV
 
   const selectWorld = (slug: string) => {
@@ -37,6 +40,16 @@ export function WorldSidebar({ worlds, activeSlug, activeSceneProject }: Props) 
         >
           <ListIcon size={16} weight="regular" className="text-white/60 sm:hidden" />
           <span>image-blaster</span>{activeSlug && <span className="text-white/40 sm:hidden md:hidden">/ {activeSlug}</span>}
+        </AppButton>
+        <AppButton
+          onClick={() => setButterfliesEnabled(!butterfliesEnabled)}
+          active={butterfliesEnabled}
+          className={`h-7 w-7 justify-center p-1 text-white ${butterfliesEnabled ? 'bg-white/15' : ''}`}
+          aria-label={butterfliesEnabled ? 'Hide butterflies' : 'Show butterflies'}
+          aria-pressed={butterfliesEnabled}
+          title={butterfliesEnabled ? 'Hide butterflies' : 'Show butterflies'}
+        >
+          <ButterflyIcon size={16} weight={butterfliesEnabled ? 'fill' : 'regular'} />
         </AppButton>
         <a
           href="https://github.com/neilsonnn/image-blaster"

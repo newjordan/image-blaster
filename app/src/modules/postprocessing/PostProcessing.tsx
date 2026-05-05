@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { EffectComposer } from '@react-three/postprocessing'
-import { BlendFunction, BloomEffect, ChromaticAberrationEffect, KernelSize } from 'postprocessing'
+import { BlendFunction, BloomEffect, ChromaticAberrationEffect, KernelSize, ToneMappingEffect, ToneMappingMode } from 'postprocessing'
 import { useThree, useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { MotionBlurEffect } from './MotionBlurEffect'
@@ -53,6 +53,10 @@ export function PostProcessing() {
   }, [])
 
   const blurEffect = useMemo(() => new MotionBlurEffect(), [])
+  const toneMappingEffect = useMemo(() => new ToneMappingEffect({
+    mode: ToneMappingMode.LINEAR,
+    blendFunction: BlendFunction.SRC,
+  }), [])
 
   useEffect(() => {
     _prevQuat.copy(camera.quaternion)
@@ -64,8 +68,9 @@ export function PostProcessing() {
       bloomEffect.dispose()
       chromaEffect.dispose()
       blurEffect.dispose()
+      toneMappingEffect.dispose()
     }
-  }, [bloomEffect, chromaEffect, blurEffect])
+  }, [bloomEffect, chromaEffect, blurEffect, toneMappingEffect])
 
   useFrame(() => {
     const s = useDebugStore.getState()
@@ -104,6 +109,7 @@ export function PostProcessing() {
       <OptionalEffect key="blur" enabled={motionBlurEnabled} object={blurEffect} />
       <OptionalEffect key="bloom" enabled={bloomEnabled} object={bloomEffect} />
       <OptionalEffect key="chroma" enabled={chromaticEnabled} object={chromaEffect} />
+      <primitive key="tone-mapping" object={toneMappingEffect} />
     </EffectComposer>
   )
 }

@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { ObjectRenderMode, ViewerQuality, WorldRenderMode } from '../types/world'
 
-export type ControllerMode = 'fly' | 'fps' | 'butterfly'
+export type ControllerMode = 'fly' | 'fps'
 
 function defaultViewerQuality() {
   if (typeof window === 'undefined') return ViewerQuality.High
@@ -22,6 +22,8 @@ interface DebugStore {
   resetObjects: () => void
   showOrigin: boolean
   setShowOrigin: (v: boolean) => void
+  butterfliesEnabled: boolean
+  setButterfliesEnabled: (v: boolean) => void
   controllerMode: ControllerMode
   setControllerMode: (v: ControllerMode) => void
   flyMouseSensitivity: number
@@ -83,6 +85,8 @@ export const useDebugStore = create<DebugStore>()(
       })),
       showOrigin: false,
       setShowOrigin: (showOrigin) => set({ showOrigin }),
+      butterfliesEnabled: false,
+      setButterfliesEnabled: (butterfliesEnabled) => set({ butterfliesEnabled }),
       controllerMode: 'fly',
       setControllerMode: (controllerMode) => set({ controllerMode }),
       flyMouseSensitivity: 0.003,
@@ -97,7 +101,7 @@ export const useDebugStore = create<DebugStore>()(
       setFalloff: (falloff) => set({ falloff }),
       sharpRange: 0,
       setSharpRange: (sharpRange) => set({ sharpRange }),
-      falloffRate: 0,
+      falloffRate: 0.01,
       setFalloffRate: (falloffRate) => set({ falloffRate }),
       bloomEnabled: true,
       setBloomEnabled: (bloomEnabled) => set({ bloomEnabled }),
@@ -124,12 +128,20 @@ export const useDebugStore = create<DebugStore>()(
     }),
     {
       name: 'image-blaster-debug',
-      version: 8,
+      version: 10,
+      migrate: (persisted, version) => {
+        if (!persisted || typeof persisted !== 'object') return persisted
+        const state = persisted as Record<string, unknown>
+        if (state.controllerMode === 'butterfly') state.controllerMode = 'fly'
+        if (version < 10) state.butterfliesEnabled = true
+        return state
+      },
       // Persist user-facing viewer controls so the Leva/debug panel survives reloads.
       partialize: (s) => ({
         viewerQuality: s.viewerQuality,
         worldRenderMode: s.worldRenderMode,
         objectRenderMode: s.objectRenderMode,
+        butterfliesEnabled: s.butterfliesEnabled,
         controllerMode: s.controllerMode,
         flyMouseSensitivity: s.flyMouseSensitivity,
         dofEnabled: s.dofEnabled,
