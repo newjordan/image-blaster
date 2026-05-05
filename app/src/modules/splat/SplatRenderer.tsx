@@ -1,6 +1,7 @@
 import { useMemo, useRef, useEffect } from 'react'
 import { extend, useThree, useFrame } from '@react-three/fiber'
 import { SplatMesh, SparkRenderer } from '@sparkjsdev/spark'
+import * as THREE from 'three'
 import { useDebugStore } from '../../store/debug'
 import { ViewerQuality } from '../../types/world'
 
@@ -23,6 +24,7 @@ const DEFAULT_FALLOFF_RATE = 0.3
 
 const SparkRendererEl = extend(SparkRenderer)
 const SplatMeshEl = extend(SplatMesh)
+const ignoreRaycast: THREE.Object3D['raycast'] = () => {}
 
 interface Props {
   url: string
@@ -78,6 +80,11 @@ export function SplatRenderer({
         spark.falloff = 1
       }
     })
+
+    useEffect(() => {
+      if (splatRef.current) splatRef.current.raycast = ignoreRaycast
+      if (sparkRef.current) sparkRef.current.raycast = ignoreRaycast
+    }, [])
 
     const sparkArgs = useMemo(() => ({ renderer, enableLod: true }), [renderer])
     const splatArgs = useMemo(

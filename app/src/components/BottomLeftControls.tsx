@@ -13,6 +13,7 @@ import { useAudioStore } from '../store/audio'
 import { useDebugStore } from '../store/debug'
 import { ObjectRenderMode, ViewerQuality, WorldRenderMode } from '../types/world'
 import { AppButton } from './AppButton'
+import { chrome } from './AppChrome'
 
 const OBJECT_MODES = [
   { mode: ObjectRenderMode.Wireframe, Icon: GlobeSimple, label: 'Wireframe' },
@@ -88,7 +89,7 @@ export function BottomLeftControls() {
   const currentWorldMode = WORLD_MODES.find((item) => item.mode === worldRenderMode) ?? WORLD_MODES[0]
 
   return (
-    <div className="flex w-full items-center justify-center gap-1 h-10 rounded px-2 bg-black/55 backdrop-blur-md sm:w-auto">
+    <div className={`${chrome.enter} ${chrome.bar} flex h-10 w-full items-center justify-center gap-1 px-2 sm:w-auto`}>
       {/* utility */}
       <ControlTooltip content="Reset">
         <AppButton onClick={resetObjects} className={utilBtn}>
@@ -101,7 +102,7 @@ export function BottomLeftControls() {
         </AppButton>
       </ControlTooltip>
 
-      <div className="w-px h-6 bg-white/15 mx-1" />
+      <div className={`${chrome.divider} mx-1`} />
 
       {/* world render mode */}
       <ControlTooltip content="View scene, objects, or both">
@@ -114,7 +115,7 @@ export function BottomLeftControls() {
         </AppButton>
       </ControlTooltip>
 
-      <div className="w-px h-6 bg-white/15 mx-1" />
+      <div className={`${chrome.divider} mx-1`} />
 
       {/* object render mode */}
       <div className="flex items-center gap-1">
@@ -131,7 +132,7 @@ export function BottomLeftControls() {
         ))}
       </div>
 
-      <div className="w-px h-6 bg-white/15 mx-1" />
+      <div className={`${chrome.divider} mx-1`} />
 
       {/* viewer quality */}
       <ControlTooltip content="Change quality">

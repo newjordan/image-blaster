@@ -14,6 +14,8 @@ interface Props {
   metricScaleFactor?: number
 }
 
+const ignoreRaycast: THREE.Object3D['raycast'] = () => {}
+
 export function WorldCollider({ url, flipY, groundPlaneOffset, metricScaleFactor }: Props) {
   const { scene: rawScene } = useGLTF(url)
   const objectRenderMode = useDebugStore((s) => s.objectRenderMode)
@@ -36,6 +38,7 @@ export function WorldCollider({ url, flipY, groundPlaneOffset, metricScaleFactor
     scene.traverse((child) => {
       if (!(child instanceof THREE.Mesh)) return
       child.visible = showMesh
+      child.raycast = ignoreRaycast
       child.receiveShadow = isShadowCatcher
       if (child.material !== wireframeMaterial && child.material !== shadedMaterial && child.material !== shadowMat) {
         const old = Array.isArray(child.material) ? child.material : [child.material]
@@ -53,6 +56,7 @@ export function WorldCollider({ url, flipY, groundPlaneOffset, metricScaleFactor
       if (!(child instanceof THREE.Mesh)) return
       child.material = wireframeOverlayMaterial
       child.renderOrder = 1
+      child.raycast = ignoreRaycast
     })
   }, [overlayScene, wireframeOverlayMaterial])
 

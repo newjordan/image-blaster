@@ -1,17 +1,16 @@
-import { Component, createRef, useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { Component, createRef, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import { RigidBody, type RapierRigidBody } from '@react-three/rapier'
 import * as THREE from 'three'
-import type { WorldObjectAsset } from '../../types/world'
+import type { WorldObjectAsset, WorldObjectPlacement } from '../../types/world'
 import { useDebugStore } from '../../store/debug'
 import { SceneObject, type SceneObjectHandle } from './SceneObject'
 import { useObjectGrab } from './useObjectGrab'
 import { cameraFocusTarget, pendingFocusId } from '../camera/cameraFocus'
+import { getInitialPlacements } from './placements'
 
-const GRID_CELL_SIZE = 1
 const SPAWN_RADIUS = 0.25
 const SPAWN_INTERVAL_MS = 250
-const OBJECT_RESET_ORIGIN: [number, number, number] = [0, 0, -0.5]
 const _focusPoint = new THREE.Vector3()
 
 interface SpawnedObject {
@@ -20,8 +19,17 @@ interface SpawnedObject {
   position: [number, number, number]
 }
 
+interface RenderedObject {
+  instanceId: string
+  asset: WorldObjectAsset
+  position: [number, number, number]
+  rotation: [number, number, number]
+  scale: [number, number, number]
+}
+
 interface Props {
   objects: WorldObjectAsset[]
+  placements?: WorldObjectPlacement[]
 }
 
 interface ObjectLoadErrorBoundaryProps {
@@ -57,19 +65,6 @@ class ObjectLoadErrorBoundary extends Component<ObjectLoadErrorBoundaryProps, Ob
   }
 }
 
-function gridPosition(index: number, total: number): [number, number, number] {
-  const columns = Math.ceil(Math.sqrt(total))
-  const rows = Math.ceil(total / columns)
-  const column = index % columns
-  const row = Math.floor(index / columns)
-
-  return [
-    OBJECT_RESET_ORIGIN[0] + (column - (columns - 1) / 2) * GRID_CELL_SIZE,
-    OBJECT_RESET_ORIGIN[1],
-    OBJECT_RESET_ORIGIN[2] + (row - (rows - 1) / 2) * GRID_CELL_SIZE,
-  ]
-}
-
 function randomOnSphere(radius: number): [number, number, number] {
   const theta = Math.random() * Math.PI * 2
   const phi = Math.acos(2 * Math.random() - 1)
@@ -82,29 +77,48 @@ function randomOnSphere(radius: number): [number, number, number] {
 
 let spawnCounter = 0
 
-export function ObjectGrid({ objects }: Props) {
+function resolveRenderedObjects(objects: WorldObjectAsset[], placements?: WorldObjectPlacement[]): RenderedObject[] {
+  const assetsById = new Map(objects.flatMap((object) => [
+    [object.id, object],
+    [object.assetId, object],
+  ]))
+  return getInitialPlacements(objects, placements).flatMap((placement) => {
+    const asset = assetsById.get(placement.assetId ?? placement.objectId) ?? assetsById.get(placement.objectId)
+    if (!asset) return []
+    return [{ instanceId: placement.instanceId, asset, position: placement.position, rotation: placement.rotation, scale: placement.scale }]
+  })
+}
+
+export function ObjectGrid({ objects, placements }: Props) {
   const { gl } = useThree()
   const [hoveredObjectId, setHoveredObjectId] = useState<string | null>(null)
   const [spawnedObjects, setSpawnedObjects] = useState<SpawnedObject[]>([])
+  const renderedObjects = useMemo(() => resolveRenderedObjects(objects, placements), [objects, placements])
   const objectRenderMode = useDebugStore((s) => s.objectRenderMode)
   const objectResetToken = useDebugStore((s) => s.objectResetToken)
   const objectRefs = useRef(new Map<string, RefObject<SceneObjectHandle | null>>())
   const anchorRef = useRef<RapierRigidBody>(null)
   const hoveredObjectIdRef = useRef<string | null>(null)
   const spawnIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const allObjectsRef = useRef<{ base: WorldObjectAsset[]; spawned: SpawnedObject[] }>({ base: objects, spawned: [] })
-  const { activeObjectId, onPointerDown, resetObjects, activeGrabRef } = useObjectGrab({ anchorRef, objectRefs })
+  const allObjectsRef = useRef<{ base: RenderedObject[]; spawned: SpawnedObject[] }>({ base: renderedObjects, spawned: [] })
+  const { activeObjectId, onPointerDown, resetObjects, activeGrabRef, cancelGrab } = useObjectGrab({ anchorRef, objectRefs })
   const anchorSphereRef = useRef<THREE.Mesh>(null)
 
-  allObjectsRef.current.base = objects
+  allObjectsRef.current.base = renderedObjects
   allObjectsRef.current.spawned = spawnedObjects
 
-  useEffect(() => {
-    const objectIds = new Set(objects.map((object) => object.id))
+  useLayoutEffect(() => {
+    const objectIds = new Set([
+      ...renderedObjects.map((object) => object.instanceId),
+      ...spawnedObjects.map((object) => object.instanceId),
+    ])
+    if (activeGrabRef.current && !objectIds.has(activeGrabRef.current.objectId)) {
+      cancelGrab()
+    }
     for (const id of objectRefs.current.keys()) {
       if (!objectIds.has(id)) objectRefs.current.delete(id)
     }
-  }, [objects])
+  }, [activeGrabRef, cancelGrab, renderedObjects, spawnedObjects])
 
   useEffect(() => {
     if (objectResetToken > 0) {
@@ -119,7 +133,7 @@ export function ObjectGrid({ objects }: Props) {
 
     const { base, spawned } = allObjectsRef.current
     const asset =
-      base.find((o) => o.id === hoveredId) ??
+      base.find((o) => o.instanceId === hoveredId)?.asset ??
       spawned.find((s) => s.instanceId === hoveredId)?.asset
 
     if (!asset) return
@@ -216,7 +230,7 @@ export function ObjectGrid({ objects }: Props) {
     }
   })
 
-  if (!objects.length) return null
+  if (!renderedObjects.length) return null
 
   return (
     <>
@@ -225,16 +239,19 @@ export function ObjectGrid({ objects }: Props) {
         <sphereGeometry args={[0.025, 10, 10]} />
         <meshBasicMaterial color={0xffffff} depthTest={false} />
       </mesh>
-      {objects.map((object, index) => (
-        <ObjectLoadErrorBoundary key={object.id} objectName={object.name} resetKey={object.url}>
+      {renderedObjects.map((object) => (
+        <ObjectLoadErrorBoundary key={`${object.instanceId}:${object.asset.assetId}:${object.asset.url}`} objectName={object.asset.name} resetKey={object.asset.url}>
           <SceneObject
-            ref={getObjectRef(object.id)}
-            object={object}
-            position={gridPosition(index, objects.length)}
+            ref={getObjectRef(object.instanceId)}
+            key={`${object.instanceId}:${object.asset.assetId}:${object.position.join(',')}:${object.rotation.join(',')}:${object.scale.join(',')}`}
+            object={{ ...object.asset, id: object.instanceId }}
+            position={object.position}
+            rotation={object.rotation}
+            scale={object.scale}
             renderMode={objectRenderMode}
-            isHovered={hoveredObjectId === object.id}
+            isHovered={hoveredObjectId === object.instanceId}
             onHover={handleHover}
-            onPointerDown={(event) => onPointerDown(object.id, event)}
+            onPointerDown={(event) => onPointerDown(object.instanceId, event)}
           />
         </ObjectLoadErrorBoundary>
       ))}
@@ -244,6 +261,8 @@ export function ObjectGrid({ objects }: Props) {
             ref={getObjectRef(spawned.instanceId)}
             object={{ ...spawned.asset, id: spawned.instanceId }}
             position={spawned.position}
+            rotation={[0, 0, 0]}
+            scale={[1, 1, 1]}
             renderMode={objectRenderMode}
             isHovered={hoveredObjectId === spawned.instanceId}
             onHover={handleHover}

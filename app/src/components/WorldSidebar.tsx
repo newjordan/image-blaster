@@ -1,41 +1,18 @@
 import { useState } from 'react'
-import { ArrowSquareOut, Cube, FolderOpenIcon, GlobeSimple, ListIcon, QuestionMarkIcon } from '@phosphor-icons/react'
+import { ArrowSquareOut, FolderOpenIcon, ListIcon, PencilSimpleIcon, QuestionMarkIcon } from '@phosphor-icons/react'
 import { useLocation } from 'wouter'
-import type { WorldEntry } from '../types/world'
+import type { WorldEntry, WorldSceneProject } from '../types/world'
 import { pendingFocusId } from '../modules/camera/cameraFocus'
 import { AppButton } from './AppButton'
+import { ChromeThumbnail, chrome } from './AppChrome'
 
 interface Props {
   worlds: WorldEntry[]
   activeSlug: string
+  activeSceneProject?: WorldSceneProject
 }
 
-function IconTile({
-  thumbnailUrl,
-  alt,
-}: {
-  thumbnailUrl?: string
-  alt: string
-  children: React.ReactNode
-}) {
-  return (
-    <span className="relative w-8 h-8 overflow-hidden rounded-lg bg-white/10 ring-1 ring-white/10 flex-shrink-0">
-      {thumbnailUrl && (
-        <img
-          src={thumbnailUrl}
-          alt={alt}
-          className="absolute inset-0 w-full h-full object-cover"
-        />
-      )}
-      <span className="absolute inset-0 bg-black/10" />
-      <span className="relative z-10 w-full h-full flex items-center justify-center text-white/50 drop-shadow">
-        {/* {children} */}
-      </span>
-    </span>
-  )
-}
-
-export function WorldSidebar({ worlds, activeSlug }: Props) {
+export function WorldSidebar({ worlds, activeSlug, activeSceneProject }: Props) {
   const [, navigate] = useLocation()
   const [menuOpen, setMenuOpen] = useState(false)
   const canOpenLocalFolders = import.meta.env.DEV
@@ -52,8 +29,8 @@ export function WorldSidebar({ worlds, activeSlug }: Props) {
   }
 
   return (
-    <aside className="w-full sm:w-56 max-h-[calc(100vh-2rem)] flex flex-col gap-1 whitespace-nowrap text-sm">
-      <div className="flex items-center justify-between rounded bg-black/60 px-2 py-1 text-sm font-medium font-mono backdrop-blur-md ring-1 ring-white/10 shadow-2xl flex-shrink-0">
+    <aside className={`${chrome.enter} w-full sm:w-56 max-h-[calc(100vh-2rem)] flex flex-col gap-1 whitespace-nowrap text-sm`}>
+      <div className={`${chrome.bar} flex flex-shrink-0 items-center justify-between px-2 py-1 text-sm font-medium font-mono`}>
         <AppButton
           onClick={() => setMenuOpen((open) => !open)}
           className="min-w-0 flex-1 gap-2 px-1 truncate font-mono text-white opacity-100 hover:bg-transparent"
@@ -75,14 +52,15 @@ export function WorldSidebar({ worlds, activeSlug }: Props) {
 
       <div
         className={`
-          flex flex-col gap-1 overflow-y-auto rounded bg-black/60 p-1.5 backdrop-blur-md ring-1 ring-white/10 shadow-2xl
+          ${chrome.panel} flex flex-col gap-1 overflow-y-auto p-1.5
           transition-[opacity,transform,max-height] duration-200 ease-out sm:max-h-[calc(100vh-5rem)] sm:translate-y-0 sm:opacity-100
           ${menuOpen ? 'max-h-[calc(100vh-5rem)] translate-y-0 opacity-100' : 'max-h-0 -translate-y-2 opacity-0 pointer-events-none sm:pointer-events-auto'}
         `}
       >
-        {worlds.map(({ slug, world, objectAssets }) => {
+        {worlds.map(({ slug, world, objectAssets, sceneProject }) => {
           const isActive = slug === activeSlug
           const name = world.display_name || slug
+          const projectLoaded = isActive ? activeSceneProject : sceneProject
           return (
             <div key={slug} className="rounded">
               <div
@@ -101,13 +79,33 @@ export function WorldSidebar({ worlds, activeSlug }: Props) {
                 >
                   <span className="min-w-0 flex-1">
                     <span className="block text-white text-sm font-medium leading-tight truncate">{name}</span>
+                    {isActive && projectLoaded && (
+                      <span className="mt-0.5 flex items-center gap-1 text-[10px] leading-tight text-green-200/75">
+                        <span className="h-1.5 w-1.5 rounded-full bg-green-300" />
+                        project.json
+                      </span>
+                    )}
                   </span>
                 </AppButton>
+                {isActive && (
+                  <AppButton
+                    onClick={() => {
+                      navigate(`/${slug}/edit`)
+                      setMenuOpen(false)
+                    }}
+                    className="h-8 w-8 flex-shrink-0 justify-center text-white"
+                    aria-label={`Edit object placement for ${name}`}
+                    title={`Edit object placement for ${name}`}
+                  >
+                    <PencilSimpleIcon size={15} weight="regular" />
+                  </AppButton>
+                )}
                 {canOpenLocalFolders && isActive && (
                   <AppButton
                     onClick={() => openWorldFolder(slug)}
                     className="h-8 w-8 flex-shrink-0 justify-center text-white"
                     aria-label={`Open local folder for ${name}`}
+                    title={`Open local folder for ${name}`}
                   >
                     <FolderOpenIcon size={15} weight="regular" />
                   </AppButton>
@@ -130,9 +128,7 @@ export function WorldSidebar({ worlds, activeSlug }: Props) {
                       className="min-w-0 flex flex-1 items-center justify-between gap-2 rounded px-2 py-1 text-left text-white opacity-80 transition-[background-color,opacity] hover:bg-white/10 hover:opacity-100"
                       aria-label={`Open ${name} in World Labs`}
                     >
-                      <IconTile thumbnailUrl={world.assets.thumbnail_url} alt={name}>
-                        <GlobeSimple size={16} weight="regular" />
-                      </IconTile>
+                      <ChromeThumbnail thumbnailUrl={world.assets.thumbnail_url} alt={name} />
                       <span className="min-w-0 flex-1">
                         <span className="block text-white/85 text-xs font-semibold leading-tight truncate">{slug}</span>
                         <span className="block text-white/40 text-[11px] leading-tight truncate">World (.spz)</span>
@@ -149,9 +145,7 @@ export function WorldSidebar({ worlds, activeSlug }: Props) {
                       }}
                       className="flex items-center gap-2 text-left group"
                     >
-                      <IconTile thumbnailUrl={obj.thumbnailUrl} alt={obj.name}>
-                        <Cube size={16} weight="regular" />
-                      </IconTile>
+                      <ChromeThumbnail thumbnailUrl={obj.thumbnailUrl} alt={obj.name} />
                       <span className="min-w-0 flex-1">
                         <span className="block text-white/80 group-hover:text-white text-xs font-medium leading-tight truncate transition-colors">
                           {obj.name}

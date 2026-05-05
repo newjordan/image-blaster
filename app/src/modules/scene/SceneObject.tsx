@@ -18,6 +18,7 @@ type HoverHandler = (objectId: string, hovering: boolean) => void
 type ClickHandler = (worldPos: THREE.Vector3) => void
 
 const ignoreRaycast: THREE.Object3D['raycast'] = () => {}
+const _rotation = new THREE.Quaternion()
 
 export interface SceneObjectHandle {
   id: string
@@ -31,6 +32,8 @@ export interface SceneObjectHandle {
 interface Props {
   object: WorldObjectAsset
   position: [number, number, number]
+  rotation?: [number, number, number]
+  scale?: [number, number, number]
   renderMode: ObjectRenderMode
   isHovered: boolean
   onHover: HoverHandler
@@ -64,6 +67,8 @@ export const SceneObject = forwardRef<SceneObjectHandle, Props>(function SceneOb
   {
     object,
     position,
+    rotation = [0, 0, 0],
+    scale = [1, 1, 1],
     renderMode,
     isHovered,
     onHover,
@@ -82,7 +87,7 @@ export const SceneObject = forwardRef<SceneObjectHandle, Props>(function SceneOb
   const muted = useAudioStore((s) => s.muted)
   const gltf = useLoader(GLTFLoader, object.url)
   const initialPosition = useMemo(() => new THREE.Vector3(...position), [position])
-  const initialRotation = useMemo(() => new THREE.Quaternion(), [])
+  const initialRotation = useMemo(() => new THREE.Quaternion().setFromEuler(new THREE.Euler(...rotation)), [rotation])
 
   const { wireframeMaterial, shadedMaterial, wireframeOverlayMaterial } = useAssetMaterials()
 
@@ -224,6 +229,17 @@ export const SceneObject = forwardRef<SceneObjectHandle, Props>(function SceneOb
   }, [muted, object.sfxUrls.length])
 
   useEffect(() => {
+    const body = rigidBodyRef.current
+    if (!body) return
+    body.setTranslation({ x: position[0], y: position[1], z: position[2] }, true)
+    _rotation.setFromEuler(new THREE.Euler(...rotation))
+    body.setRotation({ x: _rotation.x, y: _rotation.y, z: _rotation.z, w: _rotation.w }, true)
+    body.setLinvel({ x: 0, y: 0, z: 0 }, true)
+    body.setAngvel({ x: 0, y: 0, z: 0 }, true)
+    body.wakeUp()
+  }, [position, rotation, scale])
+
+  useEffect(() => {
     return () => {
       colliderWireframeMaterial.dispose()
       for (const state of materialStates) {
@@ -256,6 +272,7 @@ export const SceneObject = forwardRef<SceneObjectHandle, Props>(function SceneOb
       type="dynamic"
       colliders={false}
       position={position}
+      rotation={rotation}
       linearDamping={0.45}
       angularDamping={0.35}
       additionalSolverIterations={4}
@@ -263,12 +280,16 @@ export const SceneObject = forwardRef<SceneObjectHandle, Props>(function SceneOb
       canSleep
     >
       <CuboidCollider
-        args={[colliderHalfExtents.x, colliderHalfExtents.y, colliderHalfExtents.z]}
-        position={[colliderCenter.x, colliderCenter.y, colliderCenter.z]}
+        args={[
+          colliderHalfExtents.x * scale[0],
+          colliderHalfExtents.y * scale[1],
+          colliderHalfExtents.z * scale[2],
+        ]}
+        position={[colliderCenter.x * scale[0], colliderCenter.y * scale[1], colliderCenter.z * scale[2]]}
       />
       <mesh
         ref={colliderProxyRef}
-        position={[colliderCenter.x, colliderCenter.y, colliderCenter.z]}
+        position={[colliderCenter.x * scale[0], colliderCenter.y * scale[1], colliderCenter.z * scale[2]]}
         material={colliderWireframeMaterial}
         onPointerOver={(event) => {
           event.stopPropagation()
@@ -292,9 +313,13 @@ export const SceneObject = forwardRef<SceneObjectHandle, Props>(function SceneOb
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerCancel}
       >
-        <boxGeometry args={[colliderHalfExtents.x * 2, colliderHalfExtents.y * 2, colliderHalfExtents.z * 2]} />
+        <boxGeometry args={[
+          colliderHalfExtents.x * scale[0] * 2,
+          colliderHalfExtents.y * scale[1] * 2,
+          colliderHalfExtents.z * scale[2] * 2,
+        ]} />
       </mesh>
-      <group scale={OBJECT_SCALE}>
+      <group scale={[OBJECT_SCALE * scale[0], OBJECT_SCALE * scale[1], OBJECT_SCALE * scale[2]]}>
         <primitive object={scene} position={offset} dispose={null} />
         {renderMode === ObjectRenderMode.ShadedWireframe && (
           <primitive object={wireframeOverlayScene} position={offset} dispose={null} />

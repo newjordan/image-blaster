@@ -31,18 +31,38 @@ export interface World {
 
 export interface WorldObjectAsset {
   id: string
+  assetId: string
+  sourceWorldSlug: string
   name: string
   url: string
   thumbnailUrl?: string
   sfxUrls: string[]
 }
 
+export type Vec3Tuple = [number, number, number]
+
+export interface WorldObjectPlacement {
+  instanceId: string
+  objectId: string
+  assetId?: string
+  position: Vec3Tuple
+  rotation: Vec3Tuple
+  scale: Vec3Tuple
+}
+
+export interface WorldSceneProject {
+  version: 1
+  instances: WorldObjectPlacement[]
+}
+
 export interface WorldEntry {
   slug: string
   world: World
   objectAssets: WorldObjectAsset[]
+  allObjectAssets: WorldObjectAsset[]
   sourceImageUrl?: string
   worldSfxUrls: string[]
+  sceneProject?: WorldSceneProject
 }
 
 export enum WorldRenderMode {

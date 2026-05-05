@@ -36,6 +36,16 @@ const _bodyLinearVelocity = new THREE.Vector3()
 const _bodyAngularVelocity = new THREE.Vector3()
 const _zeroVector = { x: 0, y: 0, z: 0 }
 
+function isBodyUsable(body: RapierRigidBody | null | undefined): body is RapierRigidBody {
+  if (!body) return false
+  try {
+    body.translation()
+    return true
+  } catch {
+    return false
+  }
+}
+
 function vectorLike(vector: THREE.Vector3) {
   return { x: vector.x, y: vector.y, z: vector.z }
 }
@@ -64,19 +74,26 @@ function computeLocalAnchor(body: RapierRigidBody, worldPoint: THREE.Vector3) {
 }
 
 function clampBodyVelocity(body: RapierRigidBody) {
-  const linear = body.linvel()
+  let linear
+  let angular
+  try {
+    linear = body.linvel()
+    angular = body.angvel()
+  } catch {
+    return false
+  }
   _bodyLinearVelocity.set(linear.x, linear.y, linear.z)
   if (_bodyLinearVelocity.length() > GRAB_LINEAR_SPEED_LIMIT) {
     _bodyLinearVelocity.setLength(GRAB_LINEAR_SPEED_LIMIT)
     body.setLinvel(vectorLike(_bodyLinearVelocity), true)
   }
 
-  const angular = body.angvel()
   _bodyAngularVelocity.set(angular.x, angular.y, angular.z)
   if (_bodyAngularVelocity.length() > GRAB_ANGULAR_SPEED_LIMIT) {
     _bodyAngularVelocity.setLength(GRAB_ANGULAR_SPEED_LIMIT)
     body.setAngvel(vectorLike(_bodyAngularVelocity), true)
   }
+  return true
 }
 
 export function useObjectGrab({ anchorRef, objectRefs }: UseObjectGrabArgs) {
@@ -85,6 +102,22 @@ export function useObjectGrab({ anchorRef, objectRefs }: UseObjectGrabArgs) {
   const [activeObjectId, setActiveObjectId] = useState<string | null>(null)
   const activeGrabRef = useRef<ActiveGrab | null>(null)
   const jointRef = useRef<ReturnType<typeof world.createImpulseJoint> | null>(null)
+  const mountedRef = useRef(true)
+
+  const setActiveObjectIdSafe = useCallback((objectId: string | null) => {
+    if (mountedRef.current) setActiveObjectId(objectId)
+  }, [])
+
+  const removeJoint = useCallback(() => {
+    const joint = jointRef.current
+    if (!joint) return
+    jointRef.current = null
+    try {
+      world.removeImpulseJoint(joint, true)
+    } catch {
+      // The Rapier world may already be unloading; stale joints can be ignored.
+    }
+  }, [world])
 
   const updatePointerTarget = useCallback(
     (grab: ActiveGrab) => {
@@ -98,33 +131,36 @@ export function useObjectGrab({ anchorRef, objectRefs }: UseObjectGrabArgs) {
     const activeGrab = activeGrabRef.current
     if (!activeGrab) return
 
-    if (jointRef.current) {
-      world.removeImpulseJoint(jointRef.current, true)
-      jointRef.current = null
+    removeJoint()
+
+    if (isBodyUsable(activeGrab.body)) {
+      const releaseVelocity = activeGrab.releaseVelocity.clone()
+      if (releaseVelocity.length() > GRAB_LINEAR_SPEED_LIMIT) {
+        releaseVelocity.setLength(GRAB_LINEAR_SPEED_LIMIT)
+      }
+      activeGrab.body.setLinvel(vectorLike(releaseVelocity), true)
+      clampBodyVelocity(activeGrab.body)
+      activeGrab.body.wakeUp()
     }
 
-    const releaseVelocity = activeGrab.releaseVelocity.clone()
-    if (releaseVelocity.length() > GRAB_LINEAR_SPEED_LIMIT) {
-      releaseVelocity.setLength(GRAB_LINEAR_SPEED_LIMIT)
-    }
-    activeGrab.body.setLinvel(vectorLike(releaseVelocity), true)
-    clampBodyVelocity(activeGrab.body)
-    activeGrab.body.wakeUp()
-
-    if (gl.domElement.hasPointerCapture(activeGrab.pointerId)) {
-      gl.domElement.releasePointerCapture(activeGrab.pointerId)
+    try {
+      if (gl.domElement.hasPointerCapture(activeGrab.pointerId)) {
+        gl.domElement.releasePointerCapture(activeGrab.pointerId)
+      }
+    } catch {
+      // Pointer capture may already be gone during canvas or route teardown.
     }
 
     activeGrabRef.current = null
-    setActiveObjectId(null)
+    setActiveObjectIdSafe(null)
     markObjectInteraction()
-  }, [gl.domElement, world])
+  }, [gl.domElement, removeJoint, setActiveObjectIdSafe])
 
   const beginGrab = useCallback(
     (objectId: string, handle: SceneObjectHandle, pointerId: number, clientX: number, clientY: number, worldPoint: THREE.Vector3) => {
       const body = handle.rigidBody
       const anchor = anchorRef.current
-      if (!body || !anchor) return
+      if (!isBodyUsable(body) || !isBodyUsable(anchor)) return
 
       endGrab()
 
@@ -134,19 +170,29 @@ export function useObjectGrab({ anchorRef, objectRefs }: UseObjectGrabArgs) {
 
       anchor.setTranslation(vectorLike(worldPoint), true)
       anchor.setNextKinematicTranslation(vectorLike(worldPoint))
-      clampBodyVelocity(body)
+      if (!clampBodyVelocity(body)) return
       body.wakeUp()
 
       const bodyAnchor = computeLocalAnchor(body, worldPoint)
-      jointRef.current = world.createImpulseJoint(
-        rapier.JointData.spherical(_zeroVector, vectorLike(bodyAnchor)),
-        anchor,
-        body,
-        true,
-      )
+      try {
+        jointRef.current = world.createImpulseJoint(
+          rapier.JointData.spherical(_zeroVector, vectorLike(bodyAnchor)),
+          anchor,
+          body,
+          true,
+        )
+      } catch (error) {
+        console.warn(`Could not create grab joint for "${objectId}".`, error)
+        return
+      }
 
-      if (!gl.domElement.hasPointerCapture(pointerId)) {
-        gl.domElement.setPointerCapture(pointerId)
+      try {
+        if (!gl.domElement.hasPointerCapture(pointerId)) {
+          gl.domElement.setPointerCapture(pointerId)
+        }
+      } catch {
+        removeJoint()
+        return
       }
 
       activeGrabRef.current = {
@@ -159,16 +205,16 @@ export function useObjectGrab({ anchorRef, objectRefs }: UseObjectGrabArgs) {
         previousTarget: worldPoint.clone(),
         releaseVelocity: new THREE.Vector3(),
       }
-      setActiveObjectId(objectId)
+      setActiveObjectIdSafe(objectId)
     },
-    [anchorRef, camera, endGrab, gl.domElement, rapier.JointData, world],
+    [anchorRef, camera, endGrab, gl.domElement, rapier.JointData, removeJoint, setActiveObjectIdSafe, world],
   )
 
   const onPointerDown = useCallback(
     (objectId: string, event: ThreeEvent<PointerEvent>) => {
       const objectRef = objectRefs.current.get(objectId)
       const handle = objectRef?.current
-      if (!handle?.rigidBody) return
+      if (!isBodyUsable(handle?.rigidBody)) return
       if (event.button !== 0) return
 
       event.stopPropagation()
@@ -184,7 +230,7 @@ export function useObjectGrab({ anchorRef, objectRefs }: UseObjectGrabArgs) {
     for (const objectRef of objectRefs.current.values()) {
       const handle = objectRef.current
       const body = handle?.rigidBody
-      if (!handle || !body) continue
+      if (!handle || !isBodyUsable(body)) continue
 
       body.setTranslation(vectorLike(handle.initialPosition), true)
       body.setRotation(quaternionLike(handle.initialRotation), true)
@@ -197,7 +243,13 @@ export function useObjectGrab({ anchorRef, objectRefs }: UseObjectGrabArgs) {
   useBeforePhysicsStep((physicsWorld) => {
     const activeGrab = activeGrabRef.current
     const anchor = anchorRef.current
-    if (!activeGrab || !anchor) return
+    if (!activeGrab) return
+    if (!isBodyUsable(anchor) || !isBodyUsable(activeGrab.body)) {
+      removeJoint()
+      activeGrabRef.current = null
+      setActiveObjectIdSafe(null)
+      return
+    }
 
     updatePointerTarget(activeGrab)
     const dt = physicsWorld.timestep || 1 / 60
@@ -213,10 +265,18 @@ export function useObjectGrab({ anchorRef, objectRefs }: UseObjectGrabArgs) {
   useAfterPhysicsStep(() => {
     const activeGrab = activeGrabRef.current
     if (!activeGrab) return
+    if (!isBodyUsable(activeGrab.body)) {
+      removeJoint()
+      activeGrabRef.current = null
+      setActiveObjectIdSafe(null)
+      return
+    }
     clampBodyVelocity(activeGrab.body)
   })
 
   useEffect(() => {
+    mountedRef.current = true
+
     const onPointerMove = (event: PointerEvent) => {
       const activeGrab = activeGrabRef.current
       if (activeGrab && event.pointerId === activeGrab.pointerId) {
@@ -242,12 +302,14 @@ export function useObjectGrab({ anchorRef, objectRefs }: UseObjectGrabArgs) {
       window.removeEventListener('pointerup', onPointerEnd, { capture: true })
       window.removeEventListener('pointercancel', onPointerEnd, { capture: true })
       endGrab()
+      mountedRef.current = false
     }
   }, [endGrab, gl.domElement])
 
   return {
     activeObjectId,
     activeGrabRef,
+    cancelGrab: endGrab,
     onPointerDown,
     resetObjects,
   }

@@ -9,12 +9,13 @@ import { CharacterController, type CharacterControllerHandle } from '../modules/
 import { FlyController, type FlyControllerHandle } from '../modules/character/FlyController'
 import { ButterflyController, type ButterflyControllerHandle } from '../modules/butterfly/ButterflyController'
 import { ObjectGrid } from '../modules/scene/ObjectGrid'
+import { PlacementEditorOverlay, PlacementEditorScene, usePlacementEditor } from '../modules/scene/PlacementEditor'
 import { OriginHelper } from '../modules/scene/OriginHelper'
 import { AudioManager } from '../modules/audio/AudioManager'
 import { PostProcessing } from '../modules/postprocessing/PostProcessing'
 import { getSplatUrl } from '../utils/worldLoader'
 import { useDebugStore } from '../store/debug'
-import { WorldRenderMode, ObjectRenderMode, ViewerQuality, type World, type WorldObjectAsset } from '../types/world'
+import { WorldRenderMode, ObjectRenderMode, ViewerQuality, type World, type WorldObjectAsset, type WorldSceneProject } from '../types/world'
 
 type CharHandle = CharacterControllerHandle | ButterflyControllerHandle | FlyControllerHandle
 
@@ -22,14 +23,24 @@ interface Props {
   world: World
   slug: string
   objectAssets: WorldObjectAsset[]
+  allObjectAssets: WorldObjectAsset[]
   worldSfxUrls: string[]
+  sceneProject?: WorldSceneProject
+  sceneProjectReady?: boolean
+  editing?: boolean
+  onSceneProjectSaved?: (project: WorldSceneProject) => void
 }
 
 export function WorldViewer({
   world: desiredWorld,
   slug: desiredSlug,
   objectAssets: desiredObjectAssets,
+  allObjectAssets,
   worldSfxUrls,
+  sceneProject,
+  sceneProjectReady = true,
+  editing = false,
+  onSceneProjectSaved,
 }: Props) {
   const charRef = useRef<CharHandle>(null)
   const worldRenderMode = useDebugStore((s) => s.worldRenderMode)
@@ -40,6 +51,12 @@ export function WorldViewer({
   const environmentIntensity = useDebugStore((s) => s.environmentIntensity)
   const sunIntensity = useDebugStore((s) => s.sunIntensity)
   const sunColor = useDebugStore((s) => s.sunColor)
+  const colliderUrl = desiredWorld.assets.mesh.collider_mesh_url.startsWith('/worlds/')
+    ? desiredWorld.assets.mesh.collider_mesh_url
+    : ''
+  const panoUrl = desiredWorld.assets.imagery.pano_url.startsWith('/worlds/')
+    ? desiredWorld.assets.imagery.pano_url
+    : ''
 
   useEffect(() => {
     charRef.current?.reset()
@@ -56,6 +73,17 @@ export function WorldViewer({
   const showScene = worldRenderMode !== WorldRenderMode.ObjectOnly
   const showSplat = showScene && objectRenderMode === ObjectRenderMode.Lit
   const showObjects = worldRenderMode !== WorldRenderMode.SplatOnly
+  const placementEditor = usePlacementEditor({
+    slug: desiredSlug,
+    objects: desiredObjectAssets,
+    allObjectAssets,
+    sceneProject,
+    sceneProjectReady,
+    editing,
+    onProjectSaved: onSceneProjectSaved,
+  })
+  const objectPlacements = sceneProject?.instances ?? placementEditor.instances
+  const objectPhysicsAssets = sceneProject?.instances.length ? allObjectAssets : desiredObjectAssets
   return (
     <>
       <Canvas
@@ -76,12 +104,19 @@ export function WorldViewer({
             )}
             {showScene && (
               <Suspense fallback={null}>
-                <WorldCollider url={desiredWorld.assets.mesh.collider_mesh_url} flipY={flipY} groundPlaneOffset={ground_plane_offset} metricScaleFactor={metric_scale_factor} />
+                {colliderUrl && (
+                  <WorldCollider url={colliderUrl} flipY={flipY} groundPlaneOffset={ground_plane_offset} metricScaleFactor={metric_scale_factor} />
+                )}
               </Suspense>
             )}
-            {showObjects && (
+            {showObjects && !editing && (
               <Suspense fallback={null}>
-                <ObjectGrid objects={desiredObjectAssets} />
+                <ObjectGrid objects={objectPhysicsAssets} placements={objectPlacements} />
+              </Suspense>
+            )}
+            {showObjects && editing && (
+              <Suspense fallback={null}>
+                <PlacementEditorScene controller={placementEditor} renderMode={objectRenderMode} />
               </Suspense>
             )}
             <GroundPlane />
@@ -107,13 +142,16 @@ export function WorldViewer({
             shadow-camera-top={20}
             shadow-camera-bottom={-20}
           />
-          <Suspense fallback={null}>
-            <EnvironmentMap panoUrl={desiredWorld.assets.imagery.pano_url} intensity={environmentIntensity} />
-          </Suspense>
+          {panoUrl && (
+            <Suspense fallback={null}>
+              <EnvironmentMap panoUrl={panoUrl} intensity={environmentIntensity} />
+            </Suspense>
+          )}
           <OriginHelper />
           {isHighQuality && <PostProcessing />}
         </Suspense>
       </Canvas>
+      {editing && <PlacementEditorOverlay controller={placementEditor} />}
     </>
   )
 }

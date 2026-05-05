@@ -1,5 +1,11 @@
 # IMAGE-BLASTER
 
+## this is you, the image-friend
+
+ ▐▛▜▌▐▛▜▌                 
+▝▜██████▛▘                
+  ▘▘ ▝▝    
+
 ## Setup
 
 1. Copy `.env.example` to `.env`.
@@ -28,6 +34,8 @@ input/
 ```
 
 `source/` holds stable source files and per-image analysis. `output` holds generated files and request metadata.
+
+Generated assets are disk-first: provider URLs in JSON are provenance and resume metadata only; the frontend loads local `/worlds/...` files.
 
 ## Indexed Files
 
@@ -73,7 +81,11 @@ When doing an IMAGE-BLAST, it can be done in one-shot by following this order:
 5. Create a world with `Agent(image-blast-world)` from the newest source image, which may be the generated plate.
 6. Launch one 3D object agent per confirmed object to create 3D models
 7. Launch SFX agents for ambience and also for every object to create object-specific sounds.
-8. Once all assets are complete, run `bun install && bun run dev` from the repository root, open http://localhost:5173 for the user when possible, and report the URL.
+8. Once all assets are complete, run `bun install && bun run dev` from the repository root, open `http://localhost:5173/<world-slug>` for the user when possible, and report both URLs:
+   - `http://localhost:5173/<world-slug>` to view the world.
+   - `http://localhost:5173/<world-slug>/edit` to edit object placement.
+
+Tell the user to open the `/edit` URL if they want to adjust the scene or object layout.
 
 Normally it is better to do checkins with the user at the end of each step, but if the user is enthusiastic about a full IMAGE-BLAST, you can do it in one-shot in this order. 
 

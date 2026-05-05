@@ -4,6 +4,7 @@ import { ViewerQuality, type WorldEntry } from '../types/world'
 const exampleEntry: WorldEntry = {
   slug: 'example',
   objectAssets: [],
+  allObjectAssets: [],
   worldSfxUrls: [],
   world: {
     world_id: 'test-id',
@@ -14,16 +15,16 @@ const exampleEntry: WorldEntry = {
     created_at: null,
     updated_at: null,
     assets: {
-      imagery: { pano_url: 'https://cdn.example.com/pano.png' },
-      mesh: { collider_mesh_url: 'https://cdn.example.com/collider.glb' },
+      imagery: { pano_url: '/worlds/example/output/world/0-world-pano.png' },
+      mesh: { collider_mesh_url: '/worlds/example/output/world/0-world.glb' },
       splats: {
         spz_urls: {
-          '500k': 'https://cdn.example.com/splat_500k.spz',
-          '150k': 'https://cdn.example.com/splat_150k.spz',
+          '500k': '/worlds/example/output/world/0-world-500k.spz',
+          '150k': '/worlds/example/output/world/0-world-150k.spz',
         },
         semantics_metadata: { metric_scale_factor: 1.0, ground_plane_offset: 0.5 },
       },
-      thumbnail_url: 'https://cdn.example.com/thumb.webp',
+      thumbnail_url: '/worlds/example/output/world/0-world-thumbnail.webp',
       caption: 'A test world',
     },
   },
@@ -50,18 +51,18 @@ describe('worldLoader', () => {
           ...exampleEntry.world.assets.splats,
           spz_urls: {
             ...exampleEntry.world.assets.splats.spz_urls,
-            full_res: 'https://cdn.example.com/splat_full.spz',
+            full_res: '/worlds/example/output/world/0-world-full_res.spz',
           },
         },
       },
     }
     const url = getSplatUrl(world, ViewerQuality.High)
-    expect(url).toBe('https://cdn.example.com/splat_full.spz')
+    expect(url).toBe('/worlds/example/output/world/0-world-full_res.spz')
   })
 
   it('getSplatUrl prefers 500k for low quality', () => {
     const url = getSplatUrl(exampleEntry.world, ViewerQuality.Low)
-    expect(url).toBe('https://cdn.example.com/splat_500k.spz')
+    expect(url).toBe('/worlds/example/output/world/0-world-500k.spz')
   })
 
   it('getSplatUrl falls back to 150k for low quality when 500k absent', () => {
@@ -71,12 +72,12 @@ describe('worldLoader', () => {
         ...exampleEntry.world.assets,
         splats: {
           ...exampleEntry.world.assets.splats,
-          spz_urls: { '150k': 'https://cdn.example.com/splat_150k.spz' },
+          spz_urls: { '150k': '/worlds/example/output/world/0-world-150k.spz' },
         },
       },
     }
     const url = getSplatUrl(world, ViewerQuality.Low)
-    expect(url).toBe('https://cdn.example.com/splat_150k.spz')
+    expect(url).toBe('/worlds/example/output/world/0-world-150k.spz')
   })
 
   it('getSplatUrl falls back to 100k for low quality when 500k and 150k are absent', () => {
@@ -86,10 +87,24 @@ describe('worldLoader', () => {
         ...exampleEntry.world.assets,
         splats: {
           ...exampleEntry.world.assets.splats,
-          spz_urls: { '100k': 'https://cdn.example.com/splat_100k.spz' },
+          spz_urls: { '100k': '/worlds/example/output/world/0-world-100k.spz' },
         },
       },
     }
-    expect(getSplatUrl(world, ViewerQuality.Low)).toBe('https://cdn.example.com/splat_100k.spz')
+    expect(getSplatUrl(world, ViewerQuality.Low)).toBe('/worlds/example/output/world/0-world-100k.spz')
+  })
+
+  it('getSplatUrl refuses provider URLs', () => {
+    const world = {
+      ...exampleEntry.world,
+      assets: {
+        ...exampleEntry.world.assets,
+        splats: {
+          ...exampleEntry.world.assets.splats,
+          spz_urls: { full_res: 'https://cdn.example.com/splat_full.spz' },
+        },
+      },
+    }
+    expect(getSplatUrl(world, ViewerQuality.High)).toBe('')
   })
 })

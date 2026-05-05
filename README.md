@@ -10,6 +10,7 @@
         '.       .'
           '-....-'
 ```
+
 ## `image-blaster`
 A Claude Code project that creates a 3D environment, SFX, and meshes from a single image.
 

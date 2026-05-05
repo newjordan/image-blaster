@@ -61,7 +61,11 @@ export const ButterflyController = forwardRef<ButterflyControllerHandle>(
       c.setApplyImpulsesToDynamicBodies(true)
       controllerRef.current = c
       return () => {
-        world.removeCharacterController(c)
+        try {
+          world.removeCharacterController(c)
+        } catch {
+          // The Rapier world may already be tearing down during route changes.
+        }
         controllerRef.current = null
       }
     }, [world])

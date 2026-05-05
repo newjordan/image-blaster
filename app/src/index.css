@@ -14,3 +14,33 @@ html, body, #root {
   overflow: hidden;
   background: black;
 }
+
+@keyframes chrome-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.chrome-enter {
+  animation: chrome-enter 180ms ease-out both;
+}
+
+@keyframes chrome-enter-center {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.chrome-enter-center {
+  animation: chrome-enter-center 180ms ease-out both;
+}

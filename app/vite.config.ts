@@ -4,6 +4,16 @@ import path from 'path'
 import fs from 'fs'
 import { spawn } from 'child_process'
 
+type WorldManifest = Record<string, unknown> & {
+  assets?: Record<string, unknown> & {
+    imagery?: Record<string, unknown>
+    mesh?: Record<string, unknown>
+    splats?: Record<string, unknown> & {
+      spz_urls?: Record<string, string | undefined>
+    }
+  }
+}
+
 function worldsPlugin(): Plugin {
   const VIRTUAL_ID = 'virtual:worlds'
   const RESOLVED_ID = '\0' + VIRTUAL_ID
@@ -12,6 +22,8 @@ function worldsPlugin(): Plugin {
   const MODEL_EXTENSIONS = new Set(['.glb'])
   const AUDIO_EXTENSIONS = new Set(['.mp3', '.ogg', '.wav', '.m4a', '.opus'])
   const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.avif'])
+  const PROJECT_VERSION = 1
+  const WORLD_SPZ_KEYS = new Set(['100k', '150k', '500k', 'full_res'])
 
   function visibleFiles(dir: string) {
     if (!fs.existsSync(dir)) return []
@@ -60,6 +72,8 @@ function worldsPlugin(): Plugin {
 
         return [{
           id: entry.name,
+          assetId: `${slug}/${entry.name}`,
+          sourceWorldSlug: slug,
           name: displayName,
           url: `/worlds/${slug}/output/${entry.name}/${model.name}`,
           thumbnailUrl: thumbnail ? `/worlds/${slug}/output/${entry.name}/${thumbnail.name}` : undefined,
@@ -76,9 +90,106 @@ function worldsPlugin(): Plugin {
       .map((file) => `/worlds/${slug}/output/sfx/${file.name}`)
   }
 
+  function worldAssetUrl(slug: string, filename?: string) {
+    return filename ? `/worlds/${slug}/output/world/${filename}` : ''
+  }
+
+  function localWorldAssetFilename(files: fs.Dirent[], predicate: (name: string) => boolean) {
+    return files.find((file) => predicate(file.name))?.name
+  }
+
+  function assetKeyForFilename(key: string) {
+    return key.replace(/[^a-z0-9_-]/gi, '_')
+  }
+
+  function withLocalWorldAssets(slug: string, world: WorldManifest) {
+    const files = visibleFiles(path.join(worldsDir, slug, 'output', 'world'))
+    const existingSpzUrls = world.assets?.splats?.spz_urls ?? {}
+    const spzUrls: Record<string, string> = {}
+
+    for (const key of Object.keys(existingSpzUrls)) {
+      const filename = localWorldAssetFilename(files, (name) => name === `0-world-${assetKeyForFilename(key)}.spz`)
+      if (filename) spzUrls[key] = worldAssetUrl(slug, filename)
+    }
+
+    for (const file of files) {
+      const match = file.name.match(/^0-world-(100k|150k|500k|full_res)\.spz$/)
+      if (match && WORLD_SPZ_KEYS.has(match[1])) spzUrls[match[1]] = worldAssetUrl(slug, file.name)
+    }
+
+    const collider = localWorldAssetFilename(files, (name) => name === '0-world.glb')
+    const pano = localWorldAssetFilename(files, (name) => /^0-world-pano\.(png|jpe?g|webp|avif)$/i.test(name))
+    const thumbnail = localWorldAssetFilename(files, (name) => /^0-world-thumbnail\.(png|jpe?g|webp|avif)$/i.test(name))
+
+    return {
+      ...world,
+      assets: {
+        ...(world.assets ?? {}),
+        mesh: {
+          ...(world.assets?.mesh ?? {}),
+          collider_mesh_url: worldAssetUrl(slug, collider),
+        },
+        imagery: {
+          ...(world.assets?.imagery ?? {}),
+          pano_url: worldAssetUrl(slug, pano),
+        },
+        splats: {
+          ...(world.assets?.splats ?? {}),
+          spz_urls: spzUrls,
+        },
+        thumbnail_url: worldAssetUrl(slug, thumbnail),
+      },
+    }
+  }
+
+  function sceneProjectPath(slug: string) {
+    const worldDir = path.resolve(worldsDir, slug)
+    const isInsideWorlds = worldDir !== worldsDir && worldDir.startsWith(`${worldsDir}${path.sep}`)
+    if (!isInsideWorlds) return null
+    return path.join(worldDir, 'scene', 'project.json')
+  }
+
+  function sanitizePlacementProject(input: unknown) {
+    if (!input || typeof input !== 'object') return undefined
+    const record = input as Record<string, unknown>
+    if (record.version !== PROJECT_VERSION || !Array.isArray(record.instances)) return undefined
+
+    const instances = record.instances.flatMap((instance): Array<Record<string, unknown>> => {
+      if (!instance || typeof instance !== 'object') return []
+      const item = instance as Record<string, unknown>
+      const { instanceId, objectId, assetId, position, rotation, scale } = item
+      const isVec3 = (value: unknown): value is [number, number, number] => (
+        Array.isArray(value) &&
+        value.length === 3 &&
+        value.every((part) => typeof part === 'number' && Number.isFinite(part))
+      )
+
+      if (typeof instanceId !== 'string' || typeof objectId !== 'string') return []
+      if (assetId !== undefined && typeof assetId !== 'string') return []
+      if (!isVec3(position) || !isVec3(rotation) || !isVec3(scale)) return []
+      return [{ instanceId, objectId, ...(assetId ? { assetId } : {}), position, rotation, scale }]
+    })
+
+    return { version: PROJECT_VERSION, instances }
+  }
+
+  function readSceneProject(slug: string) {
+    const filePath = sceneProjectPath(slug)
+    if (!filePath || !fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) return undefined
+    try {
+      return sanitizePlacementProject(JSON.parse(fs.readFileSync(filePath, 'utf-8')))
+    } catch {
+      return undefined
+    }
+  }
+
+  function isSceneProjectFile(file: string) {
+    return path.basename(file) === 'project.json' && path.basename(path.dirname(file)) === 'scene'
+  }
+
   function readWorlds() {
     if (!fs.existsSync(worldsDir)) return []
-    return fs.readdirSync(worldsDir)
+    const entries = fs.readdirSync(worldsDir)
       .filter((slug) => {
         const f = path.join(worldsDir, slug, 'output', 'world', 'world.json')
         return fs.existsSync(f) && fs.statSync(f).isFile()
@@ -87,12 +198,16 @@ function worldsPlugin(): Plugin {
         const raw = fs.readFileSync(path.join(worldsDir, slug, 'output', 'world', 'world.json'), 'utf-8')
         return {
           slug,
-          world: JSON.parse(raw),
+          world: withLocalWorldAssets(slug, JSON.parse(raw)),
           objectAssets: readObjectAssets(slug),
+          allObjectAssets: [],
           sourceImageUrl: readSourceImageUrl(slug),
           worldSfxUrls: readWorldSfxUrls(slug),
+          sceneProject: readSceneProject(slug),
         }
       })
+    const allObjectAssets = entries.flatMap((entry) => entry.objectAssets)
+    return entries.map((entry) => ({ ...entry, allObjectAssets }))
   }
 
   function openFolder(folderPath: string) {
@@ -119,8 +234,8 @@ function worldsPlugin(): Plugin {
       }
     },
     handleHotUpdate({ file, server }) {
-      const RELOAD_EXTENSIONS = new Set(['.glb', '.spz', '.mp3', '.ogg', '.wav', '.m4a', '.opus'])
-      if (file.startsWith(worldsDir) && RELOAD_EXTENSIONS.has(path.extname(file).toLowerCase())) {
+      const RELOAD_EXTENSIONS = new Set(['.glb', '.spz', '.mp3', '.ogg', '.wav', '.m4a', '.opus', '.json'])
+      if (file.startsWith(worldsDir) && RELOAD_EXTENSIONS.has(path.extname(file).toLowerCase()) && !isSceneProjectFile(file)) {
         const mod = server.moduleGraph.getModuleById(RESOLVED_ID)
         if (mod) server.moduleGraph.invalidateModule(mod)
         server.ws.send({ type: 'full-reload' })
@@ -128,6 +243,10 @@ function worldsPlugin(): Plugin {
     },
     configureServer(server) {
       server.watcher.add(worldsDir)
+      const invalidateWorldsModule = () => {
+        const mod = server.moduleGraph.getModuleById(RESOLVED_ID)
+        if (mod) server.moduleGraph.invalidateModule(mod)
+      }
       const MIME: Record<string, string> = {
         '.spz': 'application/octet-stream',
         '.glb': 'model/gltf-binary',
@@ -144,23 +263,85 @@ function worldsPlugin(): Plugin {
       server.middlewares.use('/__open-world-folder', (req, res) => {
         const requestUrl = new URL(req.url || '/', 'http://localhost')
         const slug = requestUrl.searchParams.get('slug')
+        const target = requestUrl.searchParams.get('target')
         if (!slug) {
           res.statusCode = 400
           res.end('Missing slug')
           return
         }
 
-        const folderPath = path.resolve(worldsDir, slug)
+        const folderPath = path.resolve(worldsDir, slug, target === 'scene' ? 'scene' : '.')
         const isInsideWorlds = folderPath === worldsDir || folderPath.startsWith(`${worldsDir}${path.sep}`)
-        if (!isInsideWorlds || !fs.existsSync(folderPath) || !fs.statSync(folderPath).isDirectory()) {
+        if (!isInsideWorlds) {
           res.statusCode = 404
           res.end('Not found')
           return
         }
 
+        fs.mkdirSync(folderPath, { recursive: true })
         openFolder(folderPath)
         res.statusCode = 204
         res.end()
+      })
+      server.middlewares.use('/__scene-project', (req, res) => {
+        const requestUrl = new URL(req.url || '/', 'http://localhost')
+        const slug = requestUrl.searchParams.get('slug')
+        if (!slug) {
+          res.statusCode = 400
+          res.end('Missing slug')
+          return
+        }
+
+        const filePath = sceneProjectPath(slug)
+        if (!filePath) {
+          res.statusCode = 400
+          res.end('Invalid slug')
+          return
+        }
+
+        if (req.method === 'GET') {
+          const project = readSceneProject(slug)
+          if (!project) {
+            res.statusCode = 404
+            res.end('Not found')
+            return
+          }
+
+          res.setHeader('Content-Type', 'application/json')
+          res.end(JSON.stringify(project, null, 2))
+          return
+        }
+
+        if (req.method !== 'POST') {
+          res.statusCode = 405
+          res.end('Method not allowed')
+          return
+        }
+
+        let body = ''
+        req.setEncoding('utf-8')
+        req.on('data', (chunk) => {
+          body += chunk
+        })
+        req.on('end', () => {
+          try {
+            const project = sanitizePlacementProject(JSON.parse(body))
+            if (!project) {
+              res.statusCode = 400
+              res.end('Invalid project')
+              return
+            }
+
+            fs.mkdirSync(path.dirname(filePath), { recursive: true })
+            fs.writeFileSync(filePath, `${JSON.stringify(project, null, 2)}\n`)
+            invalidateWorldsModule()
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify(project))
+          } catch {
+            res.statusCode = 400
+            res.end('Invalid JSON')
+          }
+        })
       })
       server.middlewares.use('/worlds', (req, res, next) => {
         const requestPath = decodeURIComponent((req.url || '/').split('?')[0])

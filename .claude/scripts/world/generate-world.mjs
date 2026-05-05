@@ -20,25 +20,50 @@ const MODEL = "marble-1.1";
 const IMAGE_EXTENSIONS = new Set([".avif", ".gif", ".heic", ".heif", ".jpeg", ".jpg", ".png", ".webp"]);
 
 async function downloadAsset(url, destPath) {
+  if (await pathExists(destPath)) return destPath;
   const response = await fetch(url);
   if (!response.ok) throw new Error(`Download failed (${response.status}): ${url}`);
   await writeFile(destPath, Buffer.from(await response.arrayBuffer()));
   return destPath;
 }
 
+function extensionFromUrl(url, fallback) {
+  try {
+    return path.extname(new URL(url).pathname) || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function assetKeyForFilename(key) {
+  return String(key).replace(/[^a-z0-9_-]/gi, "_");
+}
+
 async function downloadWorldAssets(worldResponse, outputDir) {
   const assets = worldResponse.assets || {};
-  const result = {};
+  const result = { spz: {} };
 
   const glbUrl = assets.mesh?.collider_mesh_url;
   if (glbUrl) {
-    result.glb = await downloadAsset(glbUrl, path.join(outputDir, "0-world.glb")).catch(() => null);
+    result.glb = await downloadAsset(glbUrl, path.join(outputDir, "0-world.glb"));
+  }
+
+  const panoUrl = assets.imagery?.pano_url;
+  if (panoUrl) {
+    const ext = extensionFromUrl(panoUrl, ".png");
+    result.pano = await downloadAsset(panoUrl, path.join(outputDir, `0-world-pano${ext}`));
+  }
+
+  const thumbnailUrl = assets.thumbnail_url;
+  if (thumbnailUrl) {
+    const ext = extensionFromUrl(thumbnailUrl, ".webp");
+    result.thumbnail = await downloadAsset(thumbnailUrl, path.join(outputDir, `0-world-thumbnail${ext}`));
   }
 
   const spzUrls = assets.splats?.spz_urls || {};
-  const spzKey = ["150k", "500k", "100k", "full_res"].find((k) => spzUrls[k]);
-  if (spzKey) {
-    result.spz = await downloadAsset(spzUrls[spzKey], path.join(outputDir, `0-world-${spzKey}.spz`)).catch(() => null);
+  for (const [key, url] of Object.entries(spzUrls)) {
+    if (!url) continue;
+    result.spz[key] = await downloadAsset(url, path.join(outputDir, `0-world-${assetKeyForFilename(key)}.spz`));
   }
 
   return result;
@@ -208,12 +233,15 @@ export async function generateWorld(options) {
   await ensureDir(outputDir);
 
   if ((await pathExists(worldPath)) && !regenerate) {
+    const existingWorld = await readJson(worldPath);
+    const downloaded = await downloadWorldAssets(existingWorld, outputDir);
     return {
       world,
       skipped: true,
       skip_reason: "world.json already exists. Pass --regenerate to create a new world.",
       world_json: worldPath,
-      operation_json: operationPath
+      operation_json: operationPath,
+      ...downloaded
     };
   }
 
