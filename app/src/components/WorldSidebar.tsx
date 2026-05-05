@@ -1,8 +1,7 @@
 import { useState } from 'react'
-import { ArrowSquareOut, FolderOpenIcon, ListIcon, PencilSimpleIcon, QuestionMarkIcon } from '@phosphor-icons/react'
+import { FolderOpenIcon, ListIcon, PencilSimpleIcon, QuestionMarkIcon } from '@phosphor-icons/react'
 import { useLocation } from 'wouter'
 import type { WorldEntry, WorldSceneProject } from '../types/world'
-import { pendingFocusId } from '../modules/camera/cameraFocus'
 import { AppButton } from './AppButton'
 import { ChromeThumbnail, chrome } from './AppChrome'
 
@@ -120,41 +119,29 @@ export function WorldSidebar({ worlds, activeSlug, activeSceneProject }: Props) 
               >
                 <div className="mt-1 flex flex-col gap-1">
                   <div className="group flex items-center gap-1">
-                    <a
-                      href={world.world_marble_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={() => setMenuOpen(false)}
-                      className="min-w-0 flex flex-1 items-center justify-between gap-2 rounded px-2 py-1 text-left text-white opacity-80 transition-[background-color,opacity] hover:bg-white/10 hover:opacity-100"
-                      aria-label={`Open ${name} in World Labs`}
-                    >
+                    <div className="min-w-0 flex flex-1 items-center justify-between gap-2 rounded px-2 py-1 text-left text-white opacity-80">
                       <ChromeThumbnail thumbnailUrl={world.assets.thumbnail_url} alt={name} />
                       <span className="min-w-0 flex-1">
                         <span className="block text-white/85 text-xs font-semibold leading-tight truncate">{slug}</span>
                         <span className="block text-white/40 text-[11px] leading-tight truncate">World (.spz)</span>
                       </span>
-                      <ArrowSquareOut size={14} weight="bold" className="flex-shrink-0 text-white/60" />
-                    </a>
+                    </div>
                   </div>
                   {objectAssets.map((obj) => (
-                    <AppButton
+                    <div
                       key={obj.id}
-                      onClick={() => {
-                        pendingFocusId.current = obj.id
-                        setMenuOpen(false)
-                      }}
-                      className="flex items-center gap-2 text-left group"
+                      className="flex items-center gap-2 rounded px-2 py-1 text-left group"
                     >
                       <ChromeThumbnail thumbnailUrl={obj.thumbnailUrl} alt={obj.name} />
                       <span className="min-w-0 flex-1">
-                        <span className="block text-white/80 group-hover:text-white text-xs font-medium leading-tight truncate transition-colors">
+                        <span className="block text-white/80 text-xs font-medium leading-tight truncate">
                           {obj.name}
                         </span>
                         <span className="block text-white/35 text-[10px] leading-tight truncate">
                           Object (.glb)
                         </span>
                       </span>
-                    </AppButton>
+                    </div>
                   ))}
                 </div>
               </div>
