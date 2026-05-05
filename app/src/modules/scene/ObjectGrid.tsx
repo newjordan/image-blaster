@@ -1,5 +1,5 @@
 import { Component, createRef, useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import { RigidBody, type RapierRigidBody } from '@react-three/rapier'
 import * as THREE from 'three'
 import type { WorldObjectAsset } from '../../types/world'
@@ -83,6 +83,7 @@ function randomOnSphere(radius: number): [number, number, number] {
 let spawnCounter = 0
 
 export function ObjectGrid({ objects }: Props) {
+  const { gl } = useThree()
   const [hoveredObjectId, setHoveredObjectId] = useState<string | null>(null)
   const [spawnedObjects, setSpawnedObjects] = useState<SpawnedObject[]>([])
   const objectRenderMode = useDebugStore((s) => s.objectRenderMode)
@@ -92,7 +93,7 @@ export function ObjectGrid({ objects }: Props) {
   const hoveredObjectIdRef = useRef<string | null>(null)
   const spawnIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const allObjectsRef = useRef<{ base: WorldObjectAsset[]; spawned: SpawnedObject[] }>({ base: objects, spawned: [] })
-  const { onPointerDown, resetObjects, activeGrabRef } = useObjectGrab({ anchorRef, objectRefs })
+  const { activeObjectId, onPointerDown, resetObjects, activeGrabRef } = useObjectGrab({ anchorRef, objectRefs })
   const anchorSphereRef = useRef<THREE.Mesh>(null)
 
   allObjectsRef.current.base = objects
@@ -186,6 +187,12 @@ export function ObjectGrid({ objects }: Props) {
     })
   }, [])
 
+  useEffect(() => {
+    gl.domElement.style.cursor = activeObjectId ? 'move' : hoveredObjectId ? 'grab' : ''
+    return () => {
+      gl.domElement.style.cursor = ''
+    }
+  }, [activeObjectId, gl.domElement, hoveredObjectId])
 
   useFrame(() => {
     const id = pendingFocusId.current

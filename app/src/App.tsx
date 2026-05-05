@@ -5,6 +5,7 @@ import { WorldSidebar } from './components/WorldSidebar'
 import { BottomLeftControls } from './components/BottomLeftControls'
 import { TouchControls } from './components/TouchControls'
 import { loadWorlds } from './utils/worldLoader'
+import { useDebugStore } from './store/debug'
 
 const worlds = loadWorlds()
 const LevaPanel = import.meta.env.DEV
@@ -16,6 +17,8 @@ const DebugPanel = import.meta.env.DEV
 
 export function App() {
   const [match, params] = useRoute('/:slug')
+  const levaCollapsed = useDebugStore((s) => s.levaCollapsed)
+  const setLevaCollapsed = useDebugStore((s) => s.setLevaCollapsed)
   useLocation()
 
   if (!worlds.length) {
@@ -38,7 +41,10 @@ export function App() {
       {LevaPanel && DebugPanel && (
         <div className="hidden md:block">
           <Suspense fallback={null}>
-            <LevaPanel theme={{ sizes: { rootWidth: '380px', controlWidth: '180px' } }} />
+            <LevaPanel
+              collapsed={{ collapsed: levaCollapsed, onChange: setLevaCollapsed }}
+              theme={{ sizes: { rootWidth: '380px', controlWidth: '180px' } }}
+            />
             <DebugPanel />
           </Suspense>
         </div>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type RefObject } from 'react'
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { ThreeEvent, useThree } from '@react-three/fiber'
 import { type RapierRigidBody, useAfterPhysicsStep, useBeforePhysicsStep, useRapier } from '@react-three/rapier'
 import * as THREE from 'three'
@@ -27,7 +27,7 @@ interface ActiveGrab {
 }
 
 const _raycaster = new THREE.Raycaster()
-const _cameraDirection = new THREE.Vector3()
+const _grabDepthVector = new THREE.Vector3()
 const _bodyPosition = new THREE.Vector3()
 const _bodyRotation = new THREE.Quaternion()
 const _inverseBodyRotation = new THREE.Quaternion()
@@ -82,6 +82,7 @@ function clampBodyVelocity(body: RapierRigidBody) {
 export function useObjectGrab({ anchorRef, objectRefs }: UseObjectGrabArgs) {
   const { camera, gl } = useThree()
   const { rapier, world } = useRapier()
+  const [activeObjectId, setActiveObjectId] = useState<string | null>(null)
   const activeGrabRef = useRef<ActiveGrab | null>(null)
   const jointRef = useRef<ReturnType<typeof world.createImpulseJoint> | null>(null)
 
@@ -115,6 +116,7 @@ export function useObjectGrab({ anchorRef, objectRefs }: UseObjectGrabArgs) {
     }
 
     activeGrabRef.current = null
+    setActiveObjectId(null)
     markObjectInteraction()
   }, [gl.domElement, world])
 
@@ -127,8 +129,8 @@ export function useObjectGrab({ anchorRef, objectRefs }: UseObjectGrabArgs) {
       endGrab()
 
       const pointerNdc = computePointerNdc(gl.domElement, clientX, clientY)
-      camera.getWorldDirection(_cameraDirection)
-      const depth = Math.max(worldPoint.clone().sub(camera.position).dot(_cameraDirection), 0.1)
+      _raycaster.setFromCamera(pointerNdc, camera)
+      const depth = Math.max(_grabDepthVector.copy(worldPoint).sub(_raycaster.ray.origin).dot(_raycaster.ray.direction), 0.1)
 
       anchor.setTranslation(vectorLike(worldPoint), true)
       anchor.setNextKinematicTranslation(vectorLike(worldPoint))
@@ -157,6 +159,7 @@ export function useObjectGrab({ anchorRef, objectRefs }: UseObjectGrabArgs) {
         previousTarget: worldPoint.clone(),
         releaseVelocity: new THREE.Vector3(),
       }
+      setActiveObjectId(objectId)
     },
     [anchorRef, camera, endGrab, gl.domElement, rapier.JointData, world],
   )
@@ -243,7 +246,7 @@ export function useObjectGrab({ anchorRef, objectRefs }: UseObjectGrabArgs) {
   }, [endGrab, gl.domElement])
 
   return {
-    activeObjectId: activeGrabRef.current?.objectId ?? null,
+    activeObjectId,
     activeGrabRef,
     onPointerDown,
     resetObjects,

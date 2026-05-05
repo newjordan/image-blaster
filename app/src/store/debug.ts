@@ -62,6 +62,8 @@ interface DebugStore {
   setSunIntensity: (v: number) => void
   sunColor: string
   setSunColor: (v: string) => void
+  levaCollapsed: boolean
+  setLevaCollapsed: (v: boolean) => void
 }
 
 export const useDebugStore = create<DebugStore>()(
@@ -117,6 +119,8 @@ export const useDebugStore = create<DebugStore>()(
       setSunIntensity: (sunIntensity) => set({ sunIntensity }),
       sunColor: '#ffffff',
       setSunColor: (sunColor) => set({ sunColor }),
+      levaCollapsed: false,
+      setLevaCollapsed: (levaCollapsed) => set({ levaCollapsed }),
     }),
     {
       name: 'image-blaster-debug',
@@ -141,6 +145,7 @@ export const useDebugStore = create<DebugStore>()(
         chromaticOffset: s.chromaticOffset,
         motionBlurEnabled: s.motionBlurEnabled,
         motionBlurStrength: s.motionBlurStrength,
+        levaCollapsed: s.levaCollapsed,
       }),
     },
   ),
