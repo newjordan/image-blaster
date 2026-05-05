@@ -12,7 +12,7 @@ function localWorldAssetUrl(url: string | undefined): string {
 export function getSplatUrl(world: World, quality: ViewerQuality = ViewerQuality.High): string {
   const urls = world.assets.splats.spz_urls
   if (quality === ViewerQuality.Low) {
-    return localWorldAssetUrl(urls['500k']) || localWorldAssetUrl(urls['150k']) || localWorldAssetUrl(urls['100k']) || localWorldAssetUrl(urls.full_res)
+    return localWorldAssetUrl(urls['500k'])
   }
-  return localWorldAssetUrl(urls.full_res) || localWorldAssetUrl(urls['500k']) || localWorldAssetUrl(urls['150k']) || localWorldAssetUrl(urls['100k'])
+  return localWorldAssetUrl(urls.full_res)
 }
