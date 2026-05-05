@@ -49,9 +49,7 @@ export function WorldViewer({
     if (controllerResetToken > 0) charRef.current?.reset()
   }, [controllerResetToken])
 
-  const lowSplatUrl = getSplatUrl(desiredWorld, ViewerQuality.Low)
-  const highSplatUrl = getSplatUrl(desiredWorld, ViewerQuality.High)
-  const hasSeparateQualitySplats = Boolean(lowSplatUrl && highSplatUrl && lowSplatUrl !== highSplatUrl)
+  const splatUrl = getSplatUrl(desiredWorld, viewerQuality)
   const { ground_plane_offset, flip_y, metric_scale_factor } = desiredWorld.assets.splats.semantics_metadata
   const flipY = flip_y ?? true
   const isHighQuality = viewerQuality === ViewerQuality.High
@@ -88,19 +86,9 @@ export function WorldViewer({
             )}
             <GroundPlane />
           </Physics>
-          {lowSplatUrl && (
+          {showSplat && splatUrl && (
             <SplatRenderer
-              url={lowSplatUrl}
-              visible={showSplat && (viewerQuality === ViewerQuality.Low || !hasSeparateQualitySplats)}
-              groundPlaneOffset={ground_plane_offset}
-              flipY={flipY}
-              metricScaleFactor={metric_scale_factor}
-            />
-          )}
-          {hasSeparateQualitySplats && highSplatUrl && (
-            <SplatRenderer
-              url={highSplatUrl}
-              visible={showSplat && viewerQuality === ViewerQuality.High}
+              url={splatUrl}
               groundPlaneOffset={ground_plane_offset}
               flipY={flipY}
               metricScaleFactor={metric_scale_factor}
@@ -113,7 +101,7 @@ export function WorldViewer({
             position={[0, 10, 0]}
             shadow-mapSize={[2048, 2048]}
             shadow-camera-near={0.5}
-            shadow-camera-far={60}
+            shadow-camera-far={30}
             shadow-camera-left={-20}
             shadow-camera-right={20}
             shadow-camera-top={20}

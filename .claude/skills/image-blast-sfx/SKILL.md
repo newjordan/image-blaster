@@ -19,8 +19,8 @@ Generate an SFX for project `$0`.
   - Object impact: resolve one object, output to `worlds/$0/output/<object-id>/sfx/`, use `--count 4 --kind object-impact --prefix impact-<object-id> --duration-seconds 1`. Do not use `--loop`.
   - Custom SFX: use the supplied prompt, output to `worlds/$0/output/sfx/` unless an object is clearly specified, use `--kind arbitrary`.
 - Prompt structure:
-  - Object impact: `isolated dry close-mic foley impact one-shot, sharp transient at the start, short natural decay, no ambience, no reverb tail, no music, no voice: <object material description from object.json> hitting a hard surface`.
-  - World ambience: `seamless ambience loop, steady background bed only, no music, no voices: <description of only ambient qualities of scene from image.json>`.
+ - Object impact: `impact one-shot, short-decay, <object material description from object.json> hitting a hard surface`.
+  - World ambience: `ambient environment, loop of <description of only ambient qualities of scene from image.json>`.
   - Custom SFX: keep it literal, short, and isolated unless the user requested ambience or a loop.
 - The script analyzes each returned file with `ffprobe`/`ffmpeg`, trims leading/trailing silence or low noise, normalizes loudness, and stores `audio_analysis` in the hidden request JSON.
 

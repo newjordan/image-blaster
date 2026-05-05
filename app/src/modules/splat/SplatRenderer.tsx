@@ -1,6 +1,6 @@
 import { useMemo, useRef, useEffect } from 'react'
 import { extend, useThree, useFrame } from '@react-three/fiber'
-import { SplatMesh, SparkRenderer, dyno } from '@sparkjsdev/spark'
+import { SplatMesh, SparkRenderer } from '@sparkjsdev/spark'
 import { useDebugStore } from '../../store/debug'
 import { ViewerQuality } from '../../types/world'
 
@@ -26,38 +26,14 @@ const SplatMeshEl = extend(SplatMesh)
 
 interface Props {
   url: string
-  visible?: boolean
   groundPlaneOffset?: number
   flipY?: boolean
   metricScaleFactor?: number
 }
 
-function makeVisibilityModifier(initialVisible = true) {
-  const visibleFloat = dyno.dynoFloat(initialVisible ? 1 : 0)
-  const modifierDyno = dyno.dyno({
-    inTypes: {
-      gsplat: dyno.Gsplat,
-      visible: 'float' as const,
-    },
-    outTypes: { gsplat: dyno.Gsplat },
-    inputs: { visible: visibleFloat },
-    statements: ({ inputs, outputs }) => [
-      `${outputs.gsplat} = ${inputs.gsplat};`,
-      `${outputs.gsplat}.rgba.a *= ${inputs.visible};`,
-    ],
-  })
-  const modifier = dyno.dynoBlock(
-    { gsplat: dyno.Gsplat },
-    { gsplat: dyno.Gsplat },
-    ({ gsplat }) => ({ gsplat: modifierDyno.apply({ gsplat }).gsplat }),
-  )
-  return { visibleFloat, modifier }
-}
-
 
 export function SplatRenderer({
   url,
-  visible = true,
   groundPlaneOffset = 0,
   flipY,
   metricScaleFactor = 1,
@@ -65,13 +41,6 @@ export function SplatRenderer({
     const renderer = useThree((state) => state.gl)
     const splatRef = useRef<SplatMesh>(null)
     const sparkRef = useRef<SparkRenderer>(null)
-    
-    const { visibleFloat, modifier } = useRef(makeVisibilityModifier(visible)).current
-
-    useEffect(() => {
-      visibleFloat.value = visible ? 1 : 0
-      splatRef.current?.updateVersion()
-    }, [visible, visibleFloat])
 
     // Patch the SparkRenderer's vertex shader once to add our custom CoC curve
     // and inject `sharpRange` / `falloffRate` uniforms.
@@ -114,10 +83,7 @@ export function SplatRenderer({
     const splatArgs = useMemo(
       () => ({
         url,
-        objectModifier: modifier,
       }),
-      // modifier is stable; only url triggers a new SplatMesh
-      // eslint-disable-next-line react-hooks/exhaustive-deps
       [url],
     )
 
