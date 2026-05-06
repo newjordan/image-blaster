@@ -55,7 +55,7 @@ export const Butterfly = forwardRef<THREE.Group, Props>(function Butterfly(
       transparent: true,
       alphaTest: 0.5,
       side: THREE.DoubleSide,
-      roughness: 0,
+      roughness: 0.25,
     })
     cloned.traverse((c) => {
       const mesh = c as THREE.Mesh
