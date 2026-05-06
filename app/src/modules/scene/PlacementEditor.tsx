@@ -196,6 +196,7 @@ function EditableObject({
       </group>
       <mesh
         position={[0, Math.max(size.y * OBJECT_SCALE, 0.01) / 2, 0]}
+        renderOrder={10000}
         onPointerOver={(event) => {
           event.stopPropagation()
           setHovered(true)
@@ -211,7 +212,15 @@ function EditableObject({
           Math.max(size.y * OBJECT_SCALE, 0.05),
           Math.max(size.z * OBJECT_SCALE, 0.05),
         ]} />
-        <meshBasicMaterial color={selected ? 0x7dd3fc : 0xffffff} wireframe transparent opacity={selected || hovered ? 0.85 : 0} depthTest={false} />
+        <meshBasicMaterial
+          color={selected ? 0x7dd3fc : 0xffffff}
+          wireframe
+          transparent
+          opacity={selected || hovered ? 1 : 0}
+          depthTest={false}
+          depthWrite={false}
+          toneMapped={false}
+        />
       </mesh>
     </group>
   )

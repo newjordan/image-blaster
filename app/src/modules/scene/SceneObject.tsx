@@ -179,6 +179,8 @@ export const SceneObject = forwardRef<SceneObjectHandle, Props>(function SceneOb
         color: COLLIDER_WIREFRAME_COLOR,
         wireframe: true,
         transparent: true,
+        depthTest: false,
+        depthWrite: false,
         toneMapped: false,
         fog: false,
       }),
@@ -220,8 +222,11 @@ export const SceneObject = forwardRef<SceneObjectHandle, Props>(function SceneOb
   }, [isHovered, materialStates, renderMode, wireframeMaterial, shadedMaterial])
 
   useEffect(() => {
-    colliderWireframeMaterial.opacity = renderMode === ObjectRenderMode.Lit ? 0 : 1
-    colliderWireframeMaterial.depthWrite = renderMode !== ObjectRenderMode.Lit
+    const hiddenHitbox = renderMode === ObjectRenderMode.Lit
+    colliderWireframeMaterial.opacity = hiddenHitbox ? 0 : 1
+    colliderWireframeMaterial.transparent = true
+    colliderWireframeMaterial.depthTest = false
+    colliderWireframeMaterial.depthWrite = false
     colliderWireframeMaterial.needsUpdate = true
   }, [colliderWireframeMaterial, renderMode])
 
@@ -328,6 +333,7 @@ export const SceneObject = forwardRef<SceneObjectHandle, Props>(function SceneOb
         ref={colliderProxyRef}
         position={[colliderCenter.x * scale[0], colliderCenter.y * scale[1], colliderCenter.z * scale[2]]}
         material={colliderWireframeMaterial}
+        renderOrder={10000}
         onPointerOver={(event) => {
           event.stopPropagation()
           onHover(object.id, true)
