@@ -47,7 +47,6 @@ function resolveProjectPath(value) {
 function indexedJsonInfo(filePath, json) {
   const parsed = parseIndexedName(filePath);
   if (parsed) return parsed;
-  if (path.basename(filePath) === "world.json") return { index: 0, slug: "world", hidden: false };
   if (Number.isInteger(json.index) && typeof json.kind === "string") {
     return { index: json.index, slug: json.kind, hidden: true };
   }

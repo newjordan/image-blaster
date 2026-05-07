@@ -127,7 +127,7 @@ export function WorldSidebar({
                     </AppButton>
                     {isActive && (
                       <Tooltip
-                        content={`Create or edit the project.json scene for ${name}`}
+                        content={`Create or edit scene.json for ${name}`}
                         delayDuration={0}
                         side="right"
                       >
@@ -137,8 +137,8 @@ export function WorldSidebar({
                             setMenuOpen(false)
                           }}
                           className="h-8 w-8 flex-shrink-0 justify-center text-white"
-                          aria-label={`Create or edit the project.json scene for ${name}`}
-                          title={`Create or edit the project.json scene for ${name}`}
+                          aria-label={`Create or edit scene.json for ${name}`}
+                          title={`Create or edit scene.json for ${name}`}
                         >
                           <PencilSimpleIcon size={15} weight="regular" />
                         </AppButton>
@@ -176,14 +176,14 @@ export function WorldSidebar({
                             <FileExtensionBadge extension=".json" />
                           </span>
                           <span className="min-w-0 flex-1 truncate text-xs font-medium leading-tight text-white/80">
-                            project.json
+                            scene.json
                           </span>
                           {canOpenLocalFolders && (
                             <AppButton
                               onClick={() => openAssetFolder(slug, 'scene')}
                               className="h-7 w-7 flex-shrink-0 justify-center p-1 text-white opacity-0 transition-opacity group-hover:opacity-90 focus-visible:opacity-100 hover:opacity-100"
-                              aria-label={`Open scene folder for ${name}`}
-                              title={`Open scene folder for ${name}`}
+                              aria-label={`Open world folder for ${name}`}
+                              title={`Open world folder for ${name}`}
                             >
                               <FolderOpenIcon size={14} weight="regular" />
                             </AppButton>
@@ -192,9 +192,9 @@ export function WorldSidebar({
                             onClick={onActiveSceneProjectToggle}
                             active={activeSceneProjectEnabled}
                             className="h-6 w-6 flex-shrink-0 justify-center p-1 text-white/70"
-                            aria-label={activeSceneProjectEnabled ? 'Disable project.json scene' : 'Enable project.json scene'}
+                            aria-label={activeSceneProjectEnabled ? 'Disable scene.json' : 'Enable scene.json'}
                             aria-pressed={activeSceneProjectEnabled}
-                            title={activeSceneProjectEnabled ? 'Disable project.json scene' : 'Enable project.json scene'}
+                            title={activeSceneProjectEnabled ? 'Disable scene.json' : 'Enable scene.json'}
                           >
                             {activeSceneProjectEnabled ? (
                               <CheckSquareIcon size={14} weight="bold" />

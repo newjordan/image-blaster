@@ -5,13 +5,18 @@ import { useDebugStore } from '../../store/debug'
 import { ObjectRenderMode, WorldRenderMode } from '../../types/world'
 import { SHADED_COLOR } from '../scene/useAssetMaterials'
 import { DROP_TARGET_LAYER } from '../scene/dropTargets'
+import { shadowCatcherOpacity } from '../scene/shadows'
 
 const LARGE = 200
 const GRID_SIZE = 5
 const GRID_DIVS = 5
 const FLOOR_THICKNESS = 0.05
 
-export function GroundPlane() {
+interface GroundPlaneProps {
+  sunIntensity?: number
+}
+
+export function GroundPlane({ sunIntensity = 1 }: GroundPlaneProps) {
   const objectRenderMode = useDebugStore((s) => s.objectRenderMode)
   const worldRenderMode = useDebugStore((s) => s.worldRenderMode)
 
@@ -19,6 +24,7 @@ export function GroundPlane() {
   const isLit = objectRenderMode === ObjectRenderMode.Lit
   const isWireframe = objectRenderMode === ObjectRenderMode.Wireframe
   const isShaded = objectRenderMode === ObjectRenderMode.ShadedWireframe
+  const shadowOpacity = shadowCatcherOpacity(sunIntensity)
 
   const gridLines = useMemo(() => {
     const geo = new THREE.EdgesGeometry(
@@ -62,7 +68,7 @@ export function GroundPlane() {
             <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
               <planeGeometry args={[GRID_SIZE, GRID_SIZE, GRID_DIVS, GRID_DIVS]} />
               {isLit
-                ? <shadowMaterial transparent opacity={0.8} depthWrite={false} />
+                ? <shadowMaterial transparent opacity={shadowOpacity} depthWrite={false} />
                 : <meshStandardMaterial color={SHADED_COLOR} roughness={0.75} metalness={0} />
               }
             </mesh>

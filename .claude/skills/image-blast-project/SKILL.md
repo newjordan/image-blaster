@@ -34,6 +34,7 @@ node .claude/scripts/project/show-folder.mjs "worlds/<slug>"
 ```text
 worlds/<slug>/
   project.json
+  scene.json
   image.json
   source/
     <image-name>.json
@@ -41,7 +42,6 @@ worlds/<slug>/
     world/
     sfx/
     <object-slug>/
-  scene/
 ```
 
 Only minimal `project.json` and directories are created automatically. `/image-blast-uncover` writes per-image `source/<image-name>.json` and root `image.json`, then waits for user confirmation before writing per-object `output/<object-slug>/object.json` files.
@@ -56,7 +56,7 @@ Only minimal `project.json` and directories are created automatically. `/image-b
    - whether `image.json` exists
    - derived object count
    - whether world-level SFX exists
-   - whether `scene/project.json` exists
+   - whether `scene.json` exists
 6. If source images now exist and `image.json` is missing, continue directly with the `/image-blast-uncover` workflow for no-cost image analysis and object directory creation.
    If no source images exist and the user needs to add images, open the staging folder before asking them to drop files there:
 

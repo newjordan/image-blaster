@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-import { copyFile, readFile, readdir, writeFile } from "node:fs/promises";
+import { copyFile, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import {
+  downloadFile,
   ensureDir,
   inferMime,
   isUrl,
@@ -16,7 +17,6 @@ import {
 import {
   artifactPath,
   isVisibleFile,
-  latestIndexed,
   nextIndex,
   parseIndexedName,
   requestPath
@@ -28,10 +28,7 @@ const IMAGE_EXTENSIONS = new Set([".avif", ".gif", ".heic", ".heif", ".jpeg", ".
 
 async function downloadAsset(url, destPath) {
   if (await pathExists(destPath)) return destPath;
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`Download failed (${response.status}): ${url}`);
-  await writeFile(destPath, Buffer.from(await response.arrayBuffer()));
-  return destPath;
+  return downloadFile(url, destPath);
 }
 
 async function copyWorldPlate(image, outputDir, index) {
@@ -248,20 +245,16 @@ function isActiveRequest(request) {
 }
 
 async function latestWorldArtifact(outputDir) {
-  const indexed = await latestIndexed(outputDir, "world");
-  if (indexed) return indexed;
-
-  const legacyPath = path.join(outputDir, "world.json");
-  if (await pathExists(legacyPath)) {
-    return { index: 0, path: legacyPath, name: "world.json", legacy: true };
-  }
-
-  return undefined;
+  const entries = await readdir(outputDir, { withFileTypes: true }).catch(() => []);
+  const worlds = entries
+    .filter((entry) => entry.isFile())
+    .map((entry) => parseIndexedName(entry.name))
+    .filter((entry) => entry?.slug === "world" && entry.extension === ".json");
+  return worlds.sort((a, b) => b.index - a.index || b.name.localeCompare(a.name))[0];
 }
 
 async function nextWorldIndex(outputDir) {
-  const indexed = await nextIndex(outputDir, "world");
-  return indexed === 0 && (await pathExists(path.join(outputDir, "world.json"))) ? 1 : indexed;
+  return nextIndex(outputDir, "world");
 }
 
 async function pollOperation(operation, metadataPath, baseMetadata, pollIntervalMs) {

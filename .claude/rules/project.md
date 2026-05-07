@@ -17,6 +17,7 @@
 worlds/
   <world-slug>/
     project.json
+    scene.json
     image.json
     source/
       0-<slug>.<ext>
@@ -27,13 +28,11 @@ worlds/
       <object>/
         object.json
         sfx/
-    scene/
-      project.json
 
 input/
 ```
 
-`source/` holds stable source files and per-image analysis. `output` holds generated files and request metadata.
+`scene.json` holds editor placement state. `source/` holds stable source files and per-image analysis. `output` holds generated files and request metadata.
 
 Generated assets are disk-first: provider URLs in JSON are provenance and resume metadata only; the frontend loads local `/worlds/...` files.
 

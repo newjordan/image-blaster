@@ -17,8 +17,8 @@ Create or resume one World Labs world for project `$0`.
 - Without an explicit image, the world helper uses the highest-index visible image in `worlds/$0/source/`.
 - Before generating from an image, reveal the selected image in its folder for the user and ask them to confirm it looks good for world generation. If it is a plate, treat that plate as the source to preview. If the user asks for additional source edits or cleanup, stop and hand off to the relevant edit/plate skill; do not call World Labs until the user approves the image.
 - The helper resumes unfinished `.N-world-request.json`, strips base64 before writing JSON, polls World Labs, writes `N-world.json`, and downloads every referenced world asset to matching `N-world*` files in `worlds/$0/output/world/`.
-- The frontend must only load local files from disk. World Labs URLs in `world.json` are provenance/resume data only; never leave `.spz`, collider `.glb`, panorama, or thumbnail assets to be loaded from provider URLs.
-- If any referenced `.spz`, collider, or panorama URL exists in `world.json`, make sure the matching local file is present before reporting success. Use the generic local asset tool on the matching `N-world.json` if files are missing.
+- The frontend must only load local files from disk. World Labs URLs in `N-world.json` are provenance/resume data only; never leave `.spz`, collider `.glb`, panorama, or thumbnail assets to be loaded from provider URLs.
+- If any referenced `.spz`, collider, or panorama URL exists in `N-world.json`, make sure the matching local file is present before reporting success. Use the generic local asset tool on the matching `N-world.json` if files are missing.
 
 ```bash
 node .claude/scripts/project/project-state.mjs --world "$0"

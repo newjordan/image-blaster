@@ -225,7 +225,13 @@ export function WorldViewer({
             {showScene && colliderUrl && (
               <OptionalAssetBoundary label={colliderUrl} resetKey={colliderUrl}>
                 <Suspense fallback={null}>
-                  <WorldCollider url={colliderUrl} flipY={flipY} groundPlaneOffset={activeGroundPlaneOffset} metricScaleFactor={activeMetricScaleFactor} />
+                  <WorldCollider
+                    url={colliderUrl}
+                    flipY={flipY}
+                    groundPlaneOffset={activeGroundPlaneOffset}
+                    metricScaleFactor={activeMetricScaleFactor}
+                    sunIntensity={activeSunIntensity}
+                  />
                 </Suspense>
               </OptionalAssetBoundary>
             )}
@@ -244,7 +250,7 @@ export function WorldViewer({
                 <PlacementEditorScene controller={placementEditor} renderMode={objectRenderMode} />
               </Suspense>
             )}
-            <GroundPlane />
+            <GroundPlane sunIntensity={activeSunIntensity} />
           </Physics>
           {splatUrl && (
             <OptionalAssetBoundary label={splatUrl} resetKey={splatUrl}>
@@ -258,7 +264,7 @@ export function WorldViewer({
             </OptionalAssetBoundary>
           )}
           <directionalLight
-            castShadow={isHighQuality}
+            castShadow={isHighQuality && activeSunIntensity > 0}
             color={sunColor}
             intensity={activeSunIntensity}
             position={activeSunPosition}

@@ -1,6 +1,6 @@
 import { readdir } from "node:fs/promises";
 import path from "node:path";
-import { ensureDir, safeFileName, sanitizeForMetadata } from "./fal-queue.mjs";
+import { ensureDir, readJson, safeFileName, sanitizeForMetadata } from "./fal-queue.mjs";
 
 export function parseIndexedName(value) {
   const fileName = path.basename(value || "");
@@ -67,6 +67,35 @@ export async function latestIndexed(filesOrDir, slug) {
   const entries = await indexedEntries(filesOrDir);
   const artifacts = entries.filter((entry) => !entry.hidden && (!slug || entry.slug === slug));
   return artifacts.sort((a, b) => b.index - a.index).at(0);
+}
+
+export async function requestMetadataFiles(dir, options = {}) {
+  const { slug, scope } = options;
+  await ensureDir(dir);
+  const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
+  const requests = [];
+
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    const parsed = parseIndexedName(path.join(dir, entry.name));
+    if (!parsed?.hidden) continue;
+    if (slug && parsed.slug !== slug) continue;
+    if (scope !== undefined && parsed.scope !== scope) continue;
+    const filePath = path.join(dir, entry.name);
+    let data;
+    try {
+      data = await readJson(filePath);
+    } catch {
+      continue;
+    }
+    requests.push({
+      ...parsed,
+      path: filePath,
+      data
+    });
+  }
+
+  return requests.sort((a, b) => b.index - a.index);
 }
 
 export function requestPath(dir, index, slug, scope) {

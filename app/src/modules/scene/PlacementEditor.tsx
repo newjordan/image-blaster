@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { TransformControls } from '@react-three/drei'
-import { ThreeEvent, useLoader, useThree } from '@react-three/fiber'
+import { ThreeEvent, useThree } from '@react-three/fiber'
 import { useLocation } from 'wouter'
 import {
   ArrowLeft,
@@ -19,15 +19,13 @@ import {
   Plus,
 } from '@phosphor-icons/react'
 import * as THREE from 'three'
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
-import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js'
 import { AppButton } from '../../components/AppButton'
 import { ChromePanel, ChromeThumbnail, chrome } from '../../components/AppChrome'
 import { ObjectRenderMode, type WorldObjectAsset, type WorldObjectPhysics, type WorldObjectPlacement, type WorldSceneProject, type WorldSceneSun } from '../../types/world'
 import { OBJECT_SCALE } from './SceneObject'
 import { getInitialPlacements } from './placements'
 import { DROP_TARGET_LAYER } from './dropTargets'
-import { useAssetMaterials, SHADED_COLOR, HOVER_DIM_FACTOR } from './useAssetMaterials'
+import { useSceneObjectVisual } from './useSceneObjectVisual'
 import { isEditableTarget } from '../../utils/dom'
 
 export type TransformMode = 'translate' | 'rotate' | 'scale'
@@ -65,12 +63,6 @@ interface PlacementEditorSceneProps {
 
 interface PlacementEditorOverlayProps {
   controller: PlacementEditorController
-}
-
-interface MeshMaterialState {
-  mesh: THREE.Mesh
-  litMaterials: THREE.Material | THREE.Material[]
-  colorEntries: Array<{ material: THREE.Material & { color: THREE.Color }; baseColor: THREE.Color }>
 }
 
 export interface PlacementEditorController {
@@ -126,7 +118,6 @@ const PASTE_OFFSET: [number, number, number] = [0.25, 0, 0.25]
 const ROTATION_SNAP_DEGREES = 5
 const projectVersion = 1
 const DEFAULT_SCENE_SUN: WorldSceneSun = { intensity: 1, rotation: [0, 0, 0], environmentIntensity: 2 }
-const ignoreRaycast: THREE.Object3D['raycast'] = () => {}
 const TRANSFORM_FIELDS: Array<{ field: TransformField; label: string; step: number }> = [
   { field: 'position', label: 'Pos', step: 0.01 },
   { field: 'rotation', label: 'Rot', step: ROTATION_SNAP_DEGREES },
@@ -154,19 +145,6 @@ function cloneSun(sun: WorldSceneSun = DEFAULT_SCENE_SUN): WorldSceneSun {
     rotation: [...sun.rotation],
     environmentIntensity: sun.environmentIntensity ?? DEFAULT_SCENE_SUN.environmentIntensity,
   }
-}
-
-function cloneMaterial(material: THREE.Material | THREE.Material[]): THREE.Material | THREE.Material[] {
-  if (Array.isArray(material)) return material.map((m) => m.clone())
-  return material.clone()
-}
-
-function asMaterialArray(material: THREE.Material | THREE.Material[]) {
-  return Array.isArray(material) ? material : [material]
-}
-
-function hasColor(material: THREE.Material): material is THREE.Material & { color: THREE.Color } {
-  return 'color' in material && material.color instanceof THREE.Color
 }
 
 function signature(value: unknown) {
@@ -212,94 +190,11 @@ function EditableObject({
 }: EditableObjectProps) {
   const [hovered, setHovered] = useState(false)
   const activeHovered = hovered || externallyHovered
-  const gltf = useLoader(GLTFLoader, asset.url)
-  const { wireframeMaterial, shadedMaterial, wireframeOverlayMaterial } = useAssetMaterials()
-  const { scene, wireframeOverlayScene, offset, size, materialStates } = useMemo(() => {
-    const clonedScene = cloneSkeleton(gltf.scene)
-    const overlayScene = cloneSkeleton(gltf.scene)
-    const states: MeshMaterialState[] = []
-
-    clonedScene.traverse((child) => {
-      if (!(child instanceof THREE.Mesh)) return
-      child.castShadow = true
-      child.receiveShadow = false
-      child.raycast = ignoreRaycast
-
-      const litMaterials = cloneMaterial(child.material)
-      child.material = litMaterials
-      const colorEntries = asMaterialArray(litMaterials)
-        .filter(hasColor)
-        .map((material) => ({
-          material,
-          baseColor: material.color.clone(),
-        }))
-
-      states.push({ mesh: child, litMaterials, colorEntries })
-    })
-
-    const box = new THREE.Box3().setFromObject(clonedScene)
-    const center = new THREE.Vector3()
-    const size = new THREE.Vector3()
-    box.getCenter(center)
-    box.getSize(size)
-
-    overlayScene.traverse((child) => {
-      if (!(child instanceof THREE.Mesh)) return
-      child.raycast = ignoreRaycast
-    })
-
-    return {
-      scene: clonedScene,
-      wireframeOverlayScene: overlayScene,
-      offset: new THREE.Vector3(-center.x, -box.min.y, -center.z),
-      size,
-      materialStates: states,
-    }
-  }, [gltf.scene])
-
-  useEffect(() => {
-    wireframeOverlayScene.traverse((child) => {
-      if (!(child instanceof THREE.Mesh)) return
-      child.material = wireframeOverlayMaterial
-      child.renderOrder = 1
-      child.raycast = ignoreRaycast
-    })
-  }, [wireframeOverlayMaterial, wireframeOverlayScene])
-
-  useEffect(() => {
-    if (renderMode === ObjectRenderMode.ShadedWireframe) {
-      shadedMaterial.color.copy(SHADED_COLOR)
-      if (activeHovered || selected) shadedMaterial.color.multiplyScalar(HOVER_DIM_FACTOR)
-    }
-
-    for (const state of materialStates) {
-      if (renderMode === ObjectRenderMode.Wireframe) {
-        state.mesh.material = wireframeMaterial
-        continue
-      }
-
-      if (renderMode === ObjectRenderMode.ShadedWireframe) {
-        state.mesh.material = shadedMaterial
-        continue
-      }
-
-      state.mesh.material = state.litMaterials
-      for (const { material, baseColor } of state.colorEntries) {
-        material.color.copy(baseColor)
-        if (activeHovered || selected) material.color.multiplyScalar(HOVER_DIM_FACTOR)
-      }
-    }
-  }, [activeHovered, materialStates, renderMode, selected, shadedMaterial, wireframeMaterial])
-
-  useEffect(() => {
-    return () => {
-      for (const state of materialStates) {
-        for (const material of asMaterialArray(state.litMaterials)) {
-          material.dispose()
-        }
-      }
-    }
-  }, [materialStates])
+  const { scene, wireframeOverlayScene, offset, size } = useSceneObjectVisual({
+    asset,
+    renderMode,
+    emphasized: activeHovered || selected,
+  })
 
   return (
     <group
@@ -1349,7 +1244,7 @@ export function PlacementEditorOverlay({ controller }: PlacementEditorOverlayPro
             </div>
             <div className="mt-1 text-xs leading-5 text-white/65">
               {controller.saveStatus === 'error' && <div className="text-red-300">Save failed.</div>}
-              {controller.saveStatus === 'saved' && <div className="text-green-300">Saved project.json.</div>}
+              {controller.saveStatus === 'saved' && <div className="text-green-300">Saved scene.json.</div>}
               {!import.meta.env.DEV && <div>Saving and folder opening are available in dev only.</div>}
             </div>
           </ChromePanel>

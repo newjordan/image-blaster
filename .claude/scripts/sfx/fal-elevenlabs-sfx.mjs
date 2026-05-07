@@ -5,9 +5,11 @@ import {
   callFalQueue,
   downloadFile,
   ensureDir,
+  getFalQueueResult,
   one,
   parseArgs,
   pathExists,
+  pollFalQueue,
   readJson,
   slugify,
   writeJson
@@ -16,6 +18,7 @@ import {
   artifactPath,
   buildRequestSummary,
   nextIndex,
+  requestMetadataFiles,
   requestPath
 } from "../asset-pipeline/request-metadata.mjs";
 
@@ -58,6 +61,35 @@ function extensionForOutputFormat(outputFormat) {
 
 async function readJsonIfExists(filePath) {
   return (await pathExists(filePath)) ? readJson(filePath) : undefined;
+}
+
+function statusText(value) {
+  return String(value || "").toLowerCase();
+}
+
+function isActiveRequest(request) {
+  const status = statusText(request.data?.status);
+  return Boolean(request.data?.request_id && request.data?.endpoint) &&
+    !["completed", "failed", "cancelled", "canceled"].includes(status);
+}
+
+async function resumeFalRequest(request, pollIntervalMs = 3000) {
+  const status = await pollFalQueue(request.data.endpoint, request.data.request_id, {
+    statusUrl: request.data.status_url,
+    metadataPath: request.path,
+    pollIntervalMs
+  });
+  const result = await getFalQueueResult(request.data.endpoint, request.data.request_id, {
+    responseUrl: request.data.response_url,
+    metadataPath: request.path
+  });
+
+  return {
+    requestId: request.data.request_id,
+    submittedAt: request.data.submitted_at,
+    status: status.status,
+    data: result.data
+  };
 }
 
 function runCommand(command, args, options = {}) {
@@ -303,18 +335,21 @@ export async function generateSfx(options) {
     if (duration !== undefined) input.duration_seconds = duration;
 
     const audioPrefix = requestedCount > 1 ? `${prefix}-${index + 1}` : prefix;
-    const requestIndex = await nextIndex(outputDir, audioPrefix);
-    const metadataPath = requestPath(outputDir, requestIndex, audioPrefix);
-    const result = await callFalQueue(ENDPOINT, input, {
-      metadataPath,
-      metadata: {
-        kind: "sfx",
-        sfx_kind: kind,
-        provider: ENDPOINT,
-        index: requestIndex
-      },
-      pollIntervalMs: 3000
-    });
+    const activeRequest = (await requestMetadataFiles(outputDir, { slug: audioPrefix })).find(isActiveRequest);
+    const requestIndex = activeRequest?.index ?? await nextIndex(outputDir, audioPrefix);
+    const metadataPath = activeRequest?.path ?? requestPath(outputDir, requestIndex, audioPrefix);
+    const result = activeRequest
+      ? await resumeFalRequest(activeRequest)
+      : await callFalQueue(ENDPOINT, input, {
+          metadataPath,
+          metadata: {
+            kind: "sfx",
+            sfx_kind: kind,
+            provider: ENDPOINT,
+            index: requestIndex
+          },
+          pollIntervalMs: 3000
+        });
     const audioUrl = result.data?.audio?.url;
     if (!audioUrl) {
       throw new Error(`FAL SFX result did not include audio.url: ${JSON.stringify(result.data)}`);
@@ -330,6 +365,7 @@ export async function generateSfx(options) {
     const file = {
       path: audioPath,
       url: audioUrl,
+      source: result.data.audio,
       output_format: outputFormat,
       loop: Boolean(loop),
       duration_seconds: audioAnalysis.after.duration_seconds ?? duration,
@@ -359,6 +395,11 @@ export async function generateSfx(options) {
       prompt,
       inputFiles: [],
       outputFiles: [audioPath],
+      downloadedFiles: [{
+        label: "audio",
+        path: audioPath,
+        source: result.data.audio
+      }],
       result: result.data,
       extra: {
         audio_analysis: audioAnalysis

@@ -1,13 +1,11 @@
 import { Component, forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, type ReactNode } from 'react'
-import { ThreeEvent, useFrame, useLoader } from '@react-three/fiber'
+import { ThreeEvent, useFrame } from '@react-three/fiber'
 import { PositionalAudio } from '@react-three/drei'
 import { CuboidCollider, RigidBody, type RapierRigidBody } from '@react-three/rapier'
 import * as THREE from 'three'
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
-import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js'
 import { ObjectRenderMode, type WorldObjectAsset, type WorldObjectPhysics } from '../../types/world'
 import { useAudioStore } from '../../store/audio'
-import { useAssetMaterials, SHADED_COLOR, HOVER_DIM_FACTOR } from './useAssetMaterials'
+import { useSceneObjectVisual } from './useSceneObjectVisual'
 
 export const OBJECT_SCALE = 0.5
 const OBJECT_AUTO_ROTATE_Y_SPEED = 0.35
@@ -18,7 +16,6 @@ type PointerHandler = (event: ThreeEvent<PointerEvent>) => void
 type HoverHandler = (objectId: string, hovering: boolean) => void
 type ClickHandler = (worldPos: THREE.Vector3) => void
 
-const ignoreRaycast: THREE.Object3D['raycast'] = () => {}
 const _rotation = new THREE.Quaternion()
 
 export interface SceneObjectHandle {
@@ -45,12 +42,6 @@ interface Props {
   onPointerMove?: PointerHandler
   onPointerUp?: PointerHandler
   onPointerCancel?: PointerHandler
-}
-
-interface MeshMaterialState {
-  mesh: THREE.Mesh
-  litMaterials: THREE.Material | THREE.Material[]
-  colorEntries: Array<{ material: THREE.Material & { color: THREE.Color }; baseColor: THREE.Color }>
 }
 
 interface SfxLoadErrorBoundaryProps {
@@ -85,19 +76,6 @@ class SfxLoadErrorBoundary extends Component<SfxLoadErrorBoundaryProps, SfxLoadE
   }
 }
 
-function cloneMaterial(material: THREE.Material | THREE.Material[]): THREE.Material | THREE.Material[] {
-  if (Array.isArray(material)) return material.map((m) => m.clone())
-  return material.clone()
-}
-
-function asMaterialArray(material: THREE.Material | THREE.Material[]) {
-  return Array.isArray(material) ? material : [material]
-}
-
-function hasColor(material: THREE.Material): material is THREE.Material & { color: THREE.Color } {
-  return 'color' in material && material.color instanceof THREE.Color
-}
-
 export const SceneObject = forwardRef<SceneObjectHandle, Props>(function SceneObject(
   {
     object,
@@ -123,107 +101,35 @@ export const SceneObject = forwardRef<SceneObjectHandle, Props>(function SceneOb
   const sfxRefs = useRef<Array<THREE.PositionalAudio | null>>([])
   const lastSfxIndexRef = useRef<number | null>(null)
   const muted = useAudioStore((s) => s.muted)
-  const gltf = useLoader(GLTFLoader, object.url)
   const isStatic = physics === 'static'
   const initialPosition = useMemo(() => new THREE.Vector3(...position), [position])
   const initialRotation = useMemo(() => new THREE.Quaternion().setFromEuler(new THREE.Euler(...rotation)), [rotation])
-
-  const { wireframeMaterial, shadedMaterial, wireframeOverlayMaterial } = useAssetMaterials()
-
-  const {
-    scene,
-    wireframeOverlayScene,
-    offset,
-    bounds,
-    colliderCenter,
-    colliderHalfExtents,
-    materialStates,
-    colliderWireframeMaterial,
-  } = useMemo(() => {
-    const clonedScene = cloneSkeleton(gltf.scene)
-    const overlayScene = cloneSkeleton(gltf.scene)
-    const states: MeshMaterialState[] = []
-
-    clonedScene.traverse((child) => {
-      if (!(child instanceof THREE.Mesh)) return
-
-      child.castShadow = true
-      child.raycast = ignoreRaycast
-      const litMaterials = cloneMaterial(child.material)
-      child.material = litMaterials
-      const colorEntries = asMaterialArray(litMaterials)
-        .filter(hasColor)
-        .map((material) => ({
-          material,
-          baseColor: material.color.clone(),
-        }))
-
-      states.push({ mesh: child, litMaterials, colorEntries })
-    })
-
-    const box = new THREE.Box3().setFromObject(clonedScene)
-    const center = new THREE.Vector3()
-    const size = new THREE.Vector3()
-    box.getCenter(center)
-    box.getSize(size)
-
-    return {
-      scene: clonedScene,
-      wireframeOverlayScene: overlayScene,
-      offset: new THREE.Vector3(-center.x, -box.min.y, -center.z),
-      bounds: box.clone(),
-      colliderCenter: new THREE.Vector3(0, (size.y * OBJECT_SCALE) / 2, 0),
-      colliderHalfExtents: new THREE.Vector3(
-        Math.max((size.x * OBJECT_SCALE) / 2, 0.01),
-        Math.max((size.y * OBJECT_SCALE) / 2, 0.01),
-        Math.max((size.z * OBJECT_SCALE) / 2, 0.01),
-      ),
-      materialStates: states,
-      colliderWireframeMaterial: new THREE.MeshBasicMaterial({
-        color: COLLIDER_WIREFRAME_COLOR,
-        wireframe: true,
-        transparent: true,
-        depthTest: false,
-        depthWrite: false,
-        toneMapped: false,
-        fog: false,
-      }),
-    }
-  }, [gltf.scene])
-
-  useEffect(() => {
-    wireframeOverlayScene.traverse((child) => {
-      if (!(child instanceof THREE.Mesh)) return
-      child.material = wireframeOverlayMaterial
-      child.renderOrder = 1
-      child.raycast = ignoreRaycast
-    })
-  }, [wireframeOverlayScene, wireframeOverlayMaterial])
-
-  useEffect(() => {
-    if (renderMode === ObjectRenderMode.ShadedWireframe) {
-      shadedMaterial.color.copy(SHADED_COLOR)
-      if (isHovered) shadedMaterial.color.multiplyScalar(HOVER_DIM_FACTOR)
-    }
-
-    for (const state of materialStates) {
-      if (renderMode === ObjectRenderMode.Wireframe) {
-        state.mesh.material = wireframeMaterial
-        continue
-      }
-
-      if (renderMode === ObjectRenderMode.ShadedWireframe) {
-        state.mesh.material = shadedMaterial
-        continue
-      }
-
-      state.mesh.material = state.litMaterials
-      for (const { material, baseColor } of state.colorEntries) {
-        material.color.copy(baseColor)
-        if (isHovered) material.color.multiplyScalar(HOVER_DIM_FACTOR)
-      }
-    }
-  }, [isHovered, materialStates, renderMode, wireframeMaterial, shadedMaterial])
+  const { scene, wireframeOverlayScene, offset, size, bounds } = useSceneObjectVisual({
+    asset: object,
+    renderMode,
+    emphasized: isHovered,
+  })
+  const colliderCenter = useMemo(
+    () => new THREE.Vector3(0, (size.y * OBJECT_SCALE) / 2, 0),
+    [size],
+  )
+  const colliderHalfExtents = useMemo(
+    () => new THREE.Vector3(
+      Math.max((size.x * OBJECT_SCALE) / 2, 0.01),
+      Math.max((size.y * OBJECT_SCALE) / 2, 0.01),
+      Math.max((size.z * OBJECT_SCALE) / 2, 0.01),
+    ),
+    [size],
+  )
+  const colliderWireframeMaterial = useMemo(() => new THREE.MeshBasicMaterial({
+    color: COLLIDER_WIREFRAME_COLOR,
+    wireframe: true,
+    transparent: true,
+    depthTest: false,
+    depthWrite: false,
+    toneMapped: false,
+    fog: false,
+  }), [])
 
   useFrame((_, delta) => {
     if (!autoRotateY || !visualGroupRef.current) return
@@ -291,13 +197,8 @@ export const SceneObject = forwardRef<SceneObjectHandle, Props>(function SceneOb
   useEffect(() => {
     return () => {
       colliderWireframeMaterial.dispose()
-      for (const state of materialStates) {
-        for (const material of asMaterialArray(state.litMaterials)) {
-          material.dispose()
-        }
-      }
     }
-  }, [colliderWireframeMaterial, materialStates])
+  }, [colliderWireframeMaterial])
 
   useImperativeHandle(
     ref,

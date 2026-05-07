@@ -7,25 +7,32 @@ import { useDebugStore } from '../../store/debug'
 import { ObjectRenderMode, WorldRenderMode } from '../../types/world'
 import { useAssetMaterials } from '../scene/useAssetMaterials'
 import { DROP_TARGET_LAYER } from '../scene/dropTargets'
+import { shadowCatcherOpacity } from '../scene/shadows'
 
 interface Props {
   url: string
   flipY?: boolean
   groundPlaneOffset?: number
   metricScaleFactor?: number
+  sunIntensity?: number
 }
 
 const ignoreRaycast: THREE.Object3D['raycast'] = () => {}
 
-export function WorldCollider({ url, flipY, groundPlaneOffset, metricScaleFactor }: Props) {
+export function WorldCollider({ url, flipY, groundPlaneOffset, metricScaleFactor, sunIntensity = 1 }: Props) {
   const { scene: rawScene } = useGLTF(url)
   const objectRenderMode = useDebugStore((s) => s.objectRenderMode)
   const worldRenderMode = useDebugStore((s) => s.worldRenderMode)
   const { wireframeMaterial, shadedMaterial, wireframeOverlayMaterial } = useAssetMaterials()
 
   // Own shadow material instance — not shared, so shader compiles correctly per-mesh
-  const shadowMat = useMemo(() => new THREE.ShadowMaterial({ opacity: 0.8, transparent: true, depthWrite: false }), [])
+  const shadowMat = useMemo(() => new THREE.ShadowMaterial({ opacity: shadowCatcherOpacity(1), transparent: true, depthWrite: false }), [])
   useEffect(() => () => shadowMat.dispose(), [shadowMat])
+
+  useEffect(() => {
+    shadowMat.opacity = shadowCatcherOpacity(sunIntensity)
+    shadowMat.needsUpdate = true
+  }, [shadowMat, sunIntensity])
 
   const { scene, overlayScene, dropTargetScene } = useMemo(() => {
     const dropTargetScene = cloneSkeleton(rawScene)

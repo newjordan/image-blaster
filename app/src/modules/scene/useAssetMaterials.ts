@@ -8,7 +8,6 @@ export interface AssetMaterials {
   wireframeMaterial: THREE.MeshBasicMaterial
   shadedMaterial: THREE.MeshStandardMaterial
   wireframeOverlayMaterial: THREE.MeshBasicMaterial
-  shadowCatcherMaterial: THREE.ShadowMaterial
 }
 
 export function useAssetMaterials(): AssetMaterials {
@@ -31,10 +30,6 @@ export function useAssetMaterials(): AssetMaterials {
         toneMapped: false,
         fog: false,
       }),
-      shadowCatcherMaterial: new THREE.ShadowMaterial({
-        opacity: 0.3,
-        transparent: true,
-      }),
     }),
     [],
   )
@@ -44,7 +39,6 @@ export function useAssetMaterials(): AssetMaterials {
       materials.wireframeMaterial.dispose()
       materials.shadedMaterial.dispose()
       materials.wireframeOverlayMaterial.dispose()
-      materials.shadowCatcherMaterial.dispose()
     }
   }, [materials])
 
