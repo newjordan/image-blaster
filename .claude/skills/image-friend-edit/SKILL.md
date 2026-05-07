@@ -1,10 +1,10 @@
 ---
-name: image-blast-edit
+name: image-friend-edit
 description: Generate one image edit from explicit input images and a prompt. Use for source cleanup, clean plates, object removal, or other FAL-backed image edits.
 argument-hint: [image path] [prompt] [optional output dir, role, output slug]
 allowed-tools: Read Write Glob Bash(ls *) Bash(node .claude/scripts/project/ensure-local-assets.mjs *) Bash(node .claude/scripts/image-edit/generate-edit.mjs *)
 context: fork
-agent: image-blast-edit
+agent: image-friend-edit
 ---
 
 Create one edited image.

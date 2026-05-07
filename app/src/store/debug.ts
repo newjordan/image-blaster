@@ -131,7 +131,7 @@ export const useDebugStore = create<DebugStore>()(
       setLevaCollapsed: (levaCollapsed) => set({ levaCollapsed }),
     }),
     {
-      name: 'image-blaster-debug',
+      name: 'image-friend-debug',
       version: 10,
       migrate: (persisted, version) => {
         if (!persisted || typeof persisted !== 'object') return persisted
