@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Tooltip } from '@radix-ui/themes'
 import { ButterflyIcon, CheckSquareIcon, FileTextIcon, FolderOpenIcon, GlobeHemisphereWestIcon, ListIcon, PencilSimpleIcon, QuestionMarkIcon, SquareIcon } from '@phosphor-icons/react'
 import { useLocation } from 'wouter'
-import type { WorldEntry, WorldSceneProject } from '../types/world'
+import type { WorldEntry, WorldObjectAsset, WorldSceneProject } from '../types/world'
 import { useDebugStore } from '../store/debug'
 import { AppButton } from './AppButton'
 import { ChromeThumbnail, chrome } from './AppChrome'
@@ -14,6 +14,9 @@ interface Props {
   activeSceneProjectEnabled: boolean
   onActiveSceneProjectToggle: () => void
   activeWorldVersionIndex?: number
+  hoveredObjectAssetId?: string | null
+  hoveredObjectInstanceId?: string | null
+  onObjectHover?: (asset: WorldObjectAsset, hovering: boolean, instanceId?: string) => void
   onActiveWorldVersionChange: (index: number) => void
 }
 
@@ -24,6 +27,9 @@ export function WorldSidebar({
   activeSceneProjectEnabled,
   onActiveSceneProjectToggle,
   activeWorldVersionIndex,
+  hoveredObjectAssetId,
+  hoveredObjectInstanceId,
+  onObjectHover,
   onActiveWorldVersionChange,
 }: Props) {
   const [, navigate] = useLocation()
@@ -162,7 +168,7 @@ export function WorldSidebar({
                       ${isActive ? 'max-h-[32rem]' : 'max-h-0'}
                     `}
                   >
-                    <div className="mt-1 flex min-w-0 flex-col gap-1">
+                    <div className="mt-1 flex min-w-0 flex-col">
                       {isActive && projectLoaded && (
                         <div className="group flex min-w-0 items-center gap-1 rounded px-2 py-1 text-left text-white/80">
                           <span className="relative flex h-7 w-7 flex-shrink-0 items-center justify-center rounded bg-white/10 text-white/45 ring-1 ring-white/10">
@@ -243,7 +249,11 @@ export function WorldSidebar({
                       {objectAssets.map((obj) => (
                         <div
                           key={obj.assetId}
-                          className="flex min-w-0 items-center gap-2 rounded px-2 py-1 text-left group"
+                          className={`flex min-w-0 items-center gap-2 rounded px-2 py-1 text-left group ${
+                            hoveredObjectAssetId === obj.assetId && !hoveredObjectInstanceId ? 'bg-white/10 opacity-100' : ''
+                          }`}
+                          onMouseEnter={() => onObjectHover?.(obj, true)}
+                          onMouseLeave={() => onObjectHover?.(obj, false)}
                         >
                           <span className="relative flex h-7 w-7 flex-shrink-0">
                             <ChromeThumbnail thumbnailUrl={obj.thumbnailUrl} alt={obj.name} />

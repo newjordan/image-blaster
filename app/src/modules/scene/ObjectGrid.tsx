@@ -23,6 +23,8 @@ interface RenderedObject {
 interface Props {
   objects: WorldObjectAsset[]
   placements?: WorldObjectPlacement[]
+  hoveredObjectAssetId?: string | null
+  hoveredObjectInstanceId?: string | null
 }
 
 interface ObjectLoadErrorBoundaryProps {
@@ -83,7 +85,7 @@ function resolveRenderedObjects(
   })
 }
 
-export function ObjectGrid({ objects, placements }: Props) {
+export function ObjectGrid({ objects, placements, hoveredObjectAssetId, hoveredObjectInstanceId }: Props) {
   const { gl } = useThree()
   const [hoveredObjectId, setHoveredObjectId] = useState<string | null>(null)
   const renderedObjects = useMemo(() => resolveRenderedObjects(objects, placements), [objects, placements])
@@ -179,7 +181,11 @@ export function ObjectGrid({ objects, placements }: Props) {
             scale={object.scale}
             physics={object.physics}
             renderMode={objectRenderMode}
-            isHovered={hoveredObjectId === object.instanceId}
+            isHovered={
+              hoveredObjectId === object.instanceId ||
+              hoveredObjectInstanceId === object.instanceId ||
+              (!hoveredObjectInstanceId && hoveredObjectAssetId === object.asset.assetId)
+            }
             onHover={handleHover}
             onPointerDown={(event) => onPointerDown(object.instanceId, event)}
           />

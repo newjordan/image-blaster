@@ -39,6 +39,7 @@ export interface WorldObjectAsset {
   fileName?: string
   name: string
   url: string
+  referenceImageUrl?: string
   thumbnailUrl?: string
   sfxUrls: string[]
 }
@@ -73,6 +74,7 @@ export interface WorldVersion {
   index: number
   label: string
   world: World
+  plateImageUrl?: string
   complete: boolean
 }
 

@@ -118,6 +118,16 @@ function worldsPlugin(): Plugin {
   let activeWorldEditing = false
   let hotReloadEnabled = true
 
+  function localWorldsUrl(filePath: string | undefined) {
+    if (!filePath) return undefined
+    if (/^https?:\/\//i.test(filePath)) return filePath
+
+    const absolute = path.isAbsolute(filePath) ? filePath : path.resolve(__dirname, '..', filePath)
+    const relative = path.relative(worldsDir, absolute)
+    if (relative.startsWith('..') || path.isAbsolute(relative)) return undefined
+    return `/worlds/${relative.split(path.sep).join('/')}`
+  }
+
   function readSourceImageVersions(slug: string) {
     const sourceDir = path.join(worldsDir, slug, 'source')
     return indexedFiles(visibleFiles(sourceDir), { extensions: IMAGE_EXTENSIONS })
@@ -164,9 +174,17 @@ function worldsPlugin(): Plugin {
           return sameIndexImages.find((image) => image.name.includes('thumbnail')) ?? firstIndexed(sameIndexImages)
         }
 
+        const referenceImageFor = (model: IndexedArtifact) => {
+          const sameIndexImages = images.filter((image) => model.index === undefined || image.index === model.index)
+          return sameIndexImages.find((image) => image.slug === model.slug)
+            ?? sameIndexImages.find((image) => !image.name.includes('thumbnail'))
+            ?? firstIndexed(sameIndexImages)
+        }
+
         return models.map((model) => {
           const index = model.index
           const thumbnail = thumbnailFor(index)
+          const referenceImage = referenceImageFor(model)
           return {
             id: index === undefined ? entry.name : `${entry.name}-${index}`,
             assetId: index === undefined ? `${slug}/${entry.name}` : `${slug}/${entry.name}/${index}`,
@@ -177,6 +195,7 @@ function worldsPlugin(): Plugin {
             fileName: model.name,
             name: displayName,
             url: worldsUrl(slug, path.join('output', entry.name, model.name)),
+            referenceImageUrl: referenceImage ? worldsUrl(slug, path.join('output', entry.name, referenceImage.name)) : undefined,
             thumbnailUrl: thumbnail ? worldsUrl(slug, path.join('output', entry.name, thumbnail.name)) : undefined,
             sfxUrls: readSfxUrls(slug, path.join('output', entry.name, 'sfx')),
           }
@@ -357,6 +376,7 @@ function worldsPlugin(): Plugin {
       if (file.index === undefined) continue
       if (
         file.slug === 'world' ||
+        file.slug === 'world-plate' ||
         file.slug === 'world-pano' ||
         file.slug === 'world-thumbnail' ||
         /^world-(100k|150k|500k|full_res)$/.test(file.slug)
@@ -374,13 +394,28 @@ function worldsPlugin(): Plugin {
     if (!indexes.length && projectWorld) indexes.push(0)
 
     return indexes.map((index) => {
+      const files = visibleFiles(path.join(worldsDir, slug, 'output', 'world'))
       const world = withLocalWorldAssets(slug, readWorldManifestForIndex(slug, index), index)
       const colliderUrl = String(world.assets?.mesh?.collider_mesh_url || '')
       const spzUrls = world.assets?.splats?.spz_urls ?? {}
+      const plate = worldAssetFilename(files, index, 'world-plate', IMAGE_EXTENSIONS)
+      const requestMetadataPath = path.join(worldsDir, slug, 'output', 'world', `.${index}-world-request.json`)
+      const requestPlateImageUrl = (() => {
+        if (!fs.existsSync(requestMetadataPath) || !fs.statSync(requestMetadataPath).isFile()) return undefined
+        try {
+          const request = JSON.parse(fs.readFileSync(requestMetadataPath, 'utf-8')) as { input_files?: unknown }
+          const inputFile = Array.isArray(request.input_files) ? request.input_files[0] : undefined
+          return typeof inputFile === 'string' ? localWorldsUrl(inputFile) : undefined
+        } catch {
+          return undefined
+        }
+      })()
+      const plateImageUrl = plate ? worldAssetUrl(slug, plate) : requestPlateImageUrl
       return {
         index,
         label: `v${index}`,
         world,
+        ...(plateImageUrl ? { plateImageUrl } : {}),
         complete: Boolean(colliderUrl && Object.keys(spzUrls).length),
       }
     })

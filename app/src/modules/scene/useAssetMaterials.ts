@@ -2,7 +2,7 @@ import { useMemo, useEffect } from 'react'
 import * as THREE from 'three'
 
 export const SHADED_COLOR = new THREE.Color(0xb8b8b8)
-export const HOVER_DIM_FACTOR = 0.72
+export const HOVER_DIM_FACTOR = 2.5
 
 export interface AssetMaterials {
   wireframeMaterial: THREE.MeshBasicMaterial

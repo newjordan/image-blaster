@@ -42,6 +42,9 @@ interface EditorStateArgs {
   baseMetricScaleFactor: number
   sceneProjectReady: boolean
   editing: boolean
+  hoveredObjectAssetId?: string | null
+  hoveredObjectInstanceId?: string | null
+  onObjectHover?: (asset: WorldObjectAsset, hovering: boolean, instanceId?: string) => void
   onProjectSaved?: (project: WorldSceneProject) => void
 }
 
@@ -49,6 +52,7 @@ interface EditableObjectProps {
   asset: WorldObjectAsset
   placement: WorldObjectPlacement
   selected: boolean
+  externallyHovered?: boolean
   renderMode: ObjectRenderMode
   onSelect: (event: ThreeEvent<MouseEvent>, instanceId: string) => void
   setRef?: (group: THREE.Group | null) => void
@@ -79,6 +83,8 @@ export interface PlacementEditorController {
   assetsById: Map<string, WorldObjectAsset>
   instances: WorldObjectPlacement[]
   selectedId: string | null
+  hoveredObjectAssetId?: string | null
+  hoveredObjectInstanceId?: string | null
   selectedInstance?: WorldObjectPlacement
   mode: TransformMode
   setMode: (mode: TransformMode) => void
@@ -89,6 +95,7 @@ export interface PlacementEditorController {
   setSelectedId: Dispatch<SetStateAction<string | null>>
   selectInstance: (event: ThreeEvent<MouseEvent>, instanceId: string) => void
   selectFromOverlay: (instanceId: string) => void
+  hoverAsset: (asset: WorldObjectAsset, hovering: boolean, instanceId?: string) => void
   commitInstances: (next: WorldObjectPlacement[]) => void
   duplicateSelected: () => void
   duplicateInstance: (instanceId: string) => void
@@ -198,11 +205,13 @@ function EditableObject({
   asset,
   placement,
   selected,
+  externallyHovered = false,
   renderMode,
   onSelect,
   setRef,
 }: EditableObjectProps) {
   const [hovered, setHovered] = useState(false)
+  const activeHovered = hovered || externallyHovered
   const gltf = useLoader(GLTFLoader, asset.url)
   const { wireframeMaterial, shadedMaterial, wireframeOverlayMaterial } = useAssetMaterials()
   const { scene, wireframeOverlayScene, offset, size, materialStates } = useMemo(() => {
@@ -260,7 +269,7 @@ function EditableObject({
   useEffect(() => {
     if (renderMode === ObjectRenderMode.ShadedWireframe) {
       shadedMaterial.color.copy(SHADED_COLOR)
-      if (hovered || selected) shadedMaterial.color.multiplyScalar(HOVER_DIM_FACTOR)
+      if (activeHovered || selected) shadedMaterial.color.multiplyScalar(HOVER_DIM_FACTOR)
     }
 
     for (const state of materialStates) {
@@ -277,10 +286,10 @@ function EditableObject({
       state.mesh.material = state.litMaterials
       for (const { material, baseColor } of state.colorEntries) {
         material.color.copy(baseColor)
-        if (hovered || selected) material.color.multiplyScalar(HOVER_DIM_FACTOR)
+        if (activeHovered || selected) material.color.multiplyScalar(HOVER_DIM_FACTOR)
       }
     }
-  }, [hovered, materialStates, renderMode, selected, shadedMaterial, wireframeMaterial])
+  }, [activeHovered, materialStates, renderMode, selected, shadedMaterial, wireframeMaterial])
 
   useEffect(() => {
     return () => {
@@ -325,10 +334,10 @@ function EditableObject({
         <meshBasicMaterial
           color={selected ? 0x7dd3fc : 0xffffff}
           wireframe
-          transparent={!selected && !hovered}
-          opacity={selected || hovered ? 1 : 0}
+          transparent={!selected && !activeHovered}
+          opacity={selected || activeHovered ? 1 : 0}
           depthTest
-          depthWrite={selected || hovered}
+          depthWrite={selected || activeHovered}
           toneMapped={false}
         />
       </mesh>
@@ -462,7 +471,19 @@ function blurEditableTarget(target: EventTarget | null) {
   return true
 }
 
-export function usePlacementEditor({ slug, objects, allObjectAssets, sceneProject, baseMetricScaleFactor, sceneProjectReady, editing, onProjectSaved }: EditorStateArgs): PlacementEditorController {
+export function usePlacementEditor({
+  slug,
+  objects,
+  allObjectAssets,
+  sceneProject,
+  baseMetricScaleFactor,
+  sceneProjectReady,
+  editing,
+  hoveredObjectAssetId,
+  hoveredObjectInstanceId,
+  onObjectHover,
+  onProjectSaved,
+}: EditorStateArgs): PlacementEditorController {
   const initialPlacements = useMemo(
     () => getInitialPlacements(objects, sceneProject?.instances),
     [objects, sceneProject],
@@ -565,6 +586,10 @@ export function usePlacementEditor({ slug, objects, allObjectAssets, sceneProjec
   const selectFromOverlay = useCallback((instanceId: string) => {
     setSelectedId(instanceId)
   }, [])
+
+  const hoverAsset = useCallback((asset: WorldObjectAsset, hovering: boolean, instanceId?: string) => {
+    onObjectHover?.(asset, hovering, instanceId)
+  }, [onObjectHover])
 
   const copySelected = useCallback(() => {
     const selected = selectedIdRef.current
@@ -877,6 +902,8 @@ export function usePlacementEditor({ slug, objects, allObjectAssets, sceneProjec
     assetsById,
     instances,
     selectedId,
+    hoveredObjectAssetId,
+    hoveredObjectInstanceId,
     selectedInstance,
     mode,
     setMode,
@@ -887,6 +914,7 @@ export function usePlacementEditor({ slug, objects, allObjectAssets, sceneProjec
     setSelectedId,
     selectInstance,
     selectFromOverlay,
+    hoverAsset,
     commitInstances,
     duplicateSelected,
     duplicateInstance,
@@ -1083,6 +1111,10 @@ export function PlacementEditorScene({ controller, renderMode }: PlacementEditor
               asset={asset}
               placement={instance}
               selected={false}
+              externallyHovered={
+                controller.hoveredObjectInstanceId === instance.instanceId ||
+                (!controller.hoveredObjectInstanceId && controller.hoveredObjectAssetId === asset.assetId)
+              }
               renderMode={renderMode}
               onSelect={selectInstance}
             />
@@ -1095,6 +1127,10 @@ export function PlacementEditorScene({ controller, renderMode }: PlacementEditor
               asset={selectedAsset}
               placement={selectedInstance}
               selected
+              externallyHovered={
+                controller.hoveredObjectInstanceId === selectedInstance.instanceId ||
+                (!controller.hoveredObjectInstanceId && controller.hoveredObjectAssetId === selectedAsset.assetId)
+              }
               renderMode={renderMode}
               onSelect={selectInstance}
               setRef={(group) => {
@@ -1332,6 +1368,12 @@ export function PlacementEditorOverlay({ controller }: PlacementEditorOverlayPro
                   <div
                     key={instance.instanceId}
                     className={`${chrome.row} ${selected ? chrome.rowActive : chrome.rowIdle}`}
+                    onMouseEnter={() => {
+                      if (asset) controller.hoverAsset(asset, true, instance.instanceId)
+                    }}
+                    onMouseLeave={() => {
+                      if (asset) controller.hoverAsset(asset, false, instance.instanceId)
+                    }}
                   >
                     <button
                       type="button"
@@ -1414,7 +1456,9 @@ export function PlacementEditorOverlay({ controller }: PlacementEditorOverlayPro
               {controller.visibleAssetLibrary.map((asset) => (
                 <div
                   key={assetKey(asset)}
-                  className="group mb-1 flex items-center gap-1 rounded opacity-80 transition-[background-color,opacity] hover:bg-white/10 hover:opacity-100"
+                  className="group flex items-center gap-1 rounded opacity-80 transition-[background-color,opacity] hover:bg-white/10 hover:opacity-100"
+                  onMouseEnter={() => controller.hoverAsset(asset, true)}
+                  onMouseLeave={() => controller.hoverAsset(asset, false)}
                 >
                   <button
                     type="button"

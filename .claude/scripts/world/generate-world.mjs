@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFile, readdir, writeFile } from "node:fs/promises";
+import { copyFile, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
   ensureDir,
@@ -31,6 +31,19 @@ async function downloadAsset(url, destPath) {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`Download failed (${response.status}): ${url}`);
   await writeFile(destPath, Buffer.from(await response.arrayBuffer()));
+  return destPath;
+}
+
+async function copyWorldPlate(image, outputDir, index) {
+  if (!image || isUrl(image)) return undefined;
+  const ext = path.extname(image).toLowerCase();
+  if (!IMAGE_EXTENSIONS.has(ext)) return undefined;
+
+  const sourcePath = path.resolve(image);
+  if (!(await pathExists(sourcePath))) return undefined;
+
+  const destPath = artifactPath(outputDir, index, "world-plate", ext);
+  if (!(await pathExists(destPath))) await copyFile(sourcePath, destPath);
   return destPath;
 }
 
@@ -354,8 +367,10 @@ export async function generateWorld(options) {
 
   await writeJson(worldPath, completed.response);
 
+  const plate = await copyWorldPlate(image, outputDir, requestIndex);
   const downloaded = await downloadWorldAssets(completed.response, outputDir, requestIndex);
   const downloadedFiles = [
+    plate,
     downloaded.glb,
     downloaded.pano,
     downloaded.thumbnail,
@@ -377,6 +392,7 @@ export async function generateWorld(options) {
     operation_id: operationId(completed),
     request_metadata: metadataPath,
     world_json: worldPath,
+    ...(plate ? { plate } : {}),
     ...downloaded,
     route: `/${world}`
   };

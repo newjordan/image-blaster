@@ -49,7 +49,7 @@ N-slug.ext
 - `N` is the generation index. `0` is the source/original; higher numbers are derived generations.
 - `slug` is the stable family or asset slug.
 - Hidden request JSON sits beside the file it generated.
-- Multi-file generations share one index. A world generation can produce `N-world.json`, `N-world.glb`, `N-world-pano.png`, `N-world-thumbnail.webp`, and `N-world-full_res.spz`.
+- Multi-file generations share one index. A world generation can produce `N-world.json`, `N-world-plate.png`, `N-world.glb`, `N-world-pano.png`, `N-world-thumbnail.webp`, and `N-world-full_res.spz`.
 - Inspect generated state with `ls -a <directory>` to get state, and read JSON files to get more details.
 - Provider URLs are provenance inside JSON/request metadata. The frontend loads local files only.
 - Generation scripts create new indexes and record provider responses. Generic project tools handle local indexed file operations such as path computation, explicit downloads, local asset repair, and deletion.

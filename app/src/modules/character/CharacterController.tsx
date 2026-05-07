@@ -11,7 +11,7 @@ export interface CharacterControllerHandle {
 }
 
 const SPEED = 4
-const JUMP_VELOCITY = 5.5
+const JUMP_VELOCITY = 3
 const MOUSE_SMOOTHING = 0.12
 const DOLLY_UNITS_PER_PIXEL = 0.01
 const CHARACTER_HEIGHT = 1.6

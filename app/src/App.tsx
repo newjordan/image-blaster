@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useState } from 'react'
 import { useRoute, useLocation, Redirect } from 'wouter'
 import { WorldViewer } from './components/WorldViewer'
 import { WorldSidebar } from './components/WorldSidebar'
@@ -8,6 +8,7 @@ import { useSceneProject } from './modules/scene/useSceneProject'
 import { loadWorlds } from './utils/worldLoader'
 import { useDebugStore } from './store/debug'
 import { isEditableTarget } from './utils/dom'
+import type { WorldObjectAsset } from './types/world'
 
 const worlds = loadWorlds()
 const LevaPanel = import.meta.env.DEV
@@ -27,6 +28,8 @@ export function App() {
   const [uiHidden, setUiHidden] = useState(false)
   const [sceneProjectEnabled, setSceneProjectEnabled] = useState(true)
   const [selectedWorldVersions, setSelectedWorldVersions] = useState<Record<string, number>>({})
+  const [hoveredObjectAssetId, setHoveredObjectAssetId] = useState<string | null>(null)
+  const [hoveredObjectInstanceId, setHoveredObjectInstanceId] = useState<string | null>(null)
 
   if (!worlds.length) {
     return (
@@ -49,7 +52,20 @@ export function App() {
 
   useEffect(() => {
     setSceneProjectEnabled(true)
+    setHoveredObjectAssetId(null)
+    setHoveredObjectInstanceId(null)
   }, [entry.slug])
+
+  const handleObjectHover = useCallback((asset: WorldObjectAsset, hovering: boolean, instanceId?: string) => {
+    setHoveredObjectAssetId((current) => {
+      if (hovering) return asset.assetId
+      return current === asset.assetId ? null : current
+    })
+    setHoveredObjectInstanceId((current) => {
+      if (hovering) return instanceId ?? null
+      return current === instanceId ? null : current
+    })
+  }, [])
 
   useEffect(() => {
     if (!showLeva) return
@@ -100,14 +116,17 @@ export function App() {
         world={activeWorld}
         slug={entry.slug}
         sourceImageUrl={entry.sourceImageUrl}
-        sourceImageVersions={entry.sourceImageVersions}
+        plateImageUrl={entry.worldVersions.find((version) => version.index === activeWorldVersionIndex)?.plateImageUrl}
         objectAssets={entry.objectAssets}
         allObjectAssets={entry.allObjectAssets}
         worldSfxUrls={entry.worldSfxUrls}
         sceneProject={editing || sceneProjectEnabled ? sceneProject : undefined}
         sceneProjectReady={sceneProjectReady}
+        hoveredObjectAssetId={hoveredObjectAssetId}
+        hoveredObjectInstanceId={hoveredObjectInstanceId}
         editing={editing}
         uiVisible={uiVisible}
+        onObjectHover={handleObjectHover}
         onSceneProjectSaved={updateSceneProject}
       />
       {!editing && uiVisible && (
@@ -120,6 +139,9 @@ export function App() {
               activeSceneProjectEnabled={sceneProjectActive}
               onActiveSceneProjectToggle={() => setSceneProjectEnabled((enabled) => !enabled)}
               activeWorldVersionIndex={activeWorldVersionIndex}
+              hoveredObjectAssetId={hoveredObjectAssetId}
+              hoveredObjectInstanceId={hoveredObjectInstanceId}
+              onObjectHover={handleObjectHover}
               onActiveWorldVersionChange={(index) => setSelectedWorldVersions((versions) => ({
                 ...versions,
                 [entry.slug]: index,

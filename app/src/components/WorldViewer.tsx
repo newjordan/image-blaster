@@ -1,6 +1,6 @@
 import { Component, Suspense, useRef, useEffect, useState, type ReactNode } from 'react'
-import { HoverCard, Tooltip } from '@radix-ui/themes'
-import { ArrowsClockwiseIcon, CaretDownIcon, CaretUpIcon } from '@phosphor-icons/react'
+import { Tooltip } from '@radix-ui/themes'
+import { ArrowsClockwiseIcon, CaretDownIcon, CaretUpIcon, ImageIcon } from '@phosphor-icons/react'
 import { Canvas } from '@react-three/fiber'
 import { Physics } from '@react-three/rapier'
 import { SplatRenderer } from '../modules/splat/SplatRenderer'
@@ -17,11 +17,12 @@ import { AudioManager } from '../modules/audio/AudioManager'
 import { PostProcessing } from '../modules/postprocessing/PostProcessing'
 import { getSplatUrl } from '../utils/worldLoader'
 import { useDebugStore } from '../store/debug'
-import { WorldRenderMode, ObjectRenderMode, ViewerQuality, type SourceImageVersion, type Vec3Tuple, type World, type WorldObjectAsset, type WorldSceneProject } from '../types/world'
+import { WorldRenderMode, ObjectRenderMode, ViewerQuality, type Vec3Tuple, type World, type WorldObjectAsset, type WorldSceneProject } from '../types/world'
 import { AppButton } from './AppButton'
 import { chrome } from './AppChrome'
 
 type CharHandle = CharacterControllerHandle | FlyControllerHandle
+type SourcePreviewMode = 'source' | 'plate'
 const DEFAULT_ENVIRONMENT_URL = '/hdri.jpg'
 
 function sunPositionFromRotation(rotation: Vec3Tuple): Vec3Tuple {
@@ -100,14 +101,17 @@ interface Props {
   world: World
   slug: string
   sourceImageUrl?: string
-  sourceImageVersions?: SourceImageVersion[]
+  plateImageUrl?: string
   objectAssets: WorldObjectAsset[]
   allObjectAssets: WorldObjectAsset[]
   worldSfxUrls: string[]
   sceneProject?: WorldSceneProject
   sceneProjectReady?: boolean
+  hoveredObjectAssetId?: string | null
+  hoveredObjectInstanceId?: string | null
   editing?: boolean
   uiVisible?: boolean
+  onObjectHover?: (asset: WorldObjectAsset, hovering: boolean, instanceId?: string) => void
   onSceneProjectSaved?: (project: WorldSceneProject) => void
 }
 
@@ -115,14 +119,17 @@ export function WorldViewer({
   world: desiredWorld,
   slug: desiredSlug,
   sourceImageUrl,
-  sourceImageVersions = [],
+  plateImageUrl,
   objectAssets: desiredObjectAssets,
   allObjectAssets,
   worldSfxUrls,
   sceneProject,
   sceneProjectReady = true,
+  hoveredObjectAssetId,
+  hoveredObjectInstanceId,
   editing = false,
   uiVisible = true,
+  onObjectHover,
   onSceneProjectSaved,
 }: Props) {
   const charRef = useRef<CharHandle>(null)
@@ -138,7 +145,7 @@ export function WorldViewer({
   const hotReloadEnabled = useDebugStore((s) => s.hotReloadEnabled)
   const setHotReloadEnabled = useDebugStore((s) => s.setHotReloadEnabled)
   const [sourceThumbnailCollapsed, setSourceThumbnailCollapsed] = useState(false)
-  const [selectedSourceImageUrl, setSelectedSourceImageUrl] = useState(sourceImageUrl ?? '')
+  const [sourcePreviewMode, setSourcePreviewMode] = useState<SourcePreviewMode>('source')
   const colliderUrl = desiredWorld.assets.mesh.collider_mesh_url.startsWith('/worlds/')
     ? desiredWorld.assets.mesh.collider_mesh_url
     : ''
@@ -155,8 +162,8 @@ export function WorldViewer({
   }, [controllerResetToken])
 
   useEffect(() => {
-    setSelectedSourceImageUrl(sourceImageUrl ?? '')
-  }, [desiredSlug, sourceImageUrl])
+    if (!plateImageUrl && sourcePreviewMode === 'plate') setSourcePreviewMode('source')
+  }, [plateImageUrl, sourcePreviewMode])
 
   const splatUrl = getSplatUrl(desiredWorld)
   const { ground_plane_offset, flip_y, metric_scale_factor } = desiredWorld.assets.splats.semantics_metadata
@@ -166,12 +173,7 @@ export function WorldViewer({
   const showScene = worldRenderMode !== WorldRenderMode.ObjectOnly
   const showSplat = showScene && objectRenderMode === ObjectRenderMode.Lit
   const showObjects = worldRenderMode !== WorldRenderMode.SplatOnly
-  const sourceImageOptions = sourceImageVersions.length
-    ? sourceImageVersions
-    : sourceImageUrl
-      ? [{ url: sourceImageUrl, label: 'v0', fileName: sourceImageUrl.split('/').slice(-1)[0] ?? sourceImageUrl }]
-      : []
-  const activeSourceImageUrl = selectedSourceImageUrl || sourceImageOptions[0]?.url
+  const activeSourceImageUrl = sourcePreviewMode === 'plate' && plateImageUrl ? plateImageUrl : sourceImageUrl
   const placementEditor = usePlacementEditor({
     slug: desiredSlug,
     objects: desiredObjectAssets,
@@ -180,6 +182,9 @@ export function WorldViewer({
     baseMetricScaleFactor,
     sceneProjectReady,
     editing,
+    hoveredObjectAssetId,
+    hoveredObjectInstanceId,
+    onObjectHover,
     onProjectSaved: onSceneProjectSaved,
   })
   const activeSceneSun = editing ? placementEditor.sun : sceneProject?.sun
@@ -191,6 +196,16 @@ export function WorldViewer({
   const objectPlacements = sceneProject?.instances ?? placementEditor.instances
   const objectPhysicsAssets = sceneProject?.instances.length ? allObjectAssets : desiredObjectAssets
   const activeControllerMode = editing ? 'fly' : controllerMode
+  const hoveredObjectAsset = hoveredObjectAssetId
+    ? allObjectAssets.find((asset) => asset.assetId === hoveredObjectAssetId)
+      ?? desiredObjectAssets.find((asset) => asset.assetId === hoveredObjectAssetId)
+    : undefined
+  const activePreviewImageUrl = hoveredObjectAsset?.referenceImageUrl ?? hoveredObjectAsset?.thumbnailUrl ?? activeSourceImageUrl
+  const activePreviewAlt = hoveredObjectAsset
+    ? `${hoveredObjectAsset.name} reference image`
+    : sourcePreviewMode === 'plate' && plateImageUrl
+      ? 'World generation plate'
+      : 'Original source'
   return (
     <>
       <Canvas
@@ -216,7 +231,12 @@ export function WorldViewer({
             )}
             {showObjects && !editing && (
               <Suspense fallback={null}>
-                <ObjectGrid objects={objectPhysicsAssets} placements={objectPlacements} />
+                <ObjectGrid
+                  objects={objectPhysicsAssets}
+                  placements={objectPlacements}
+                  hoveredObjectAssetId={hoveredObjectAssetId}
+                  hoveredObjectInstanceId={hoveredObjectInstanceId}
+                />
               </Suspense>
             )}
             {showObjects && editing && (
@@ -267,12 +287,15 @@ export function WorldViewer({
       </Canvas>
       {uiVisible && (
         <SourceImageControls
-          activeSourceImageUrl={activeSourceImageUrl}
-          versions={sourceImageOptions}
+          activeSourceImageUrl={activePreviewImageUrl}
+          previewMode={sourcePreviewMode}
+          previewAlt={activePreviewAlt}
+          plateImageUrl={plateImageUrl}
+          objectPreviewActive={Boolean(hoveredObjectAsset)}
           thumbnailCollapsed={sourceThumbnailCollapsed}
           hotReloadEnabled={hotReloadEnabled}
           onHotReloadToggle={() => setHotReloadEnabled(!hotReloadEnabled)}
-          onSourceImageChange={setSelectedSourceImageUrl}
+          onPreviewModeToggle={() => setSourcePreviewMode((mode) => mode === 'source' ? 'plate' : 'source')}
           onThumbnailCollapseToggle={() => setSourceThumbnailCollapsed((collapsed) => !collapsed)}
         />
       )}
@@ -283,19 +306,25 @@ export function WorldViewer({
 
 function SourceImageControls({
   activeSourceImageUrl,
-  versions,
+  previewMode,
+  previewAlt,
+  plateImageUrl,
+  objectPreviewActive,
   thumbnailCollapsed,
   hotReloadEnabled,
   onHotReloadToggle,
-  onSourceImageChange,
+  onPreviewModeToggle,
   onThumbnailCollapseToggle,
 }: {
   activeSourceImageUrl?: string
-  versions: SourceImageVersion[]
+  previewMode: SourcePreviewMode
+  previewAlt: string
+  plateImageUrl?: string
+  objectPreviewActive: boolean
   thumbnailCollapsed: boolean
   hotReloadEnabled: boolean
   onHotReloadToggle: () => void
-  onSourceImageChange: (url: string) => void
+  onPreviewModeToggle: () => void
   onThumbnailCollapseToggle: () => void
 }) {
   if (!activeSourceImageUrl && !import.meta.env.DEV) return null
@@ -322,7 +351,7 @@ function SourceImageControls({
           <div className="relative overflow-hidden rounded-lg border border-white/15 bg-black/70 shadow-lg ring-1 ring-black/30 backdrop-blur-md">
             <img
               src={activeSourceImageUrl}
-              alt="Original source"
+              alt={previewAlt}
               className="block w-96 object-cover"
               draggable={false}
             />
@@ -335,12 +364,14 @@ function SourceImageControls({
                   className="pointer-events-auto"
                 />
               )}
-              <SourceImageVersionSelect
-                versions={versions}
-                value={activeSourceImageUrl}
-                onChange={onSourceImageChange}
-                className="pointer-events-auto"
-              />
+              {!objectPreviewActive && (
+                <SourcePlateToggleButton
+                  mode={previewMode}
+                  plateAvailable={Boolean(plateImageUrl)}
+                  onToggle={onPreviewModeToggle}
+                  className="pointer-events-auto"
+                />
+              )}
               <SourceThumbnailCollapseButton
                 collapsed={thumbnailCollapsed}
                 onToggle={onThumbnailCollapseToggle}
@@ -391,82 +422,39 @@ function SourceThumbnailCollapseButton({
   )
 }
 
-function SourceImageVersionSelect({
-  versions,
-  value,
-  onChange,
+function SourcePlateToggleButton({
+  mode,
+  plateAvailable,
+  onToggle,
   className = '',
 }: {
-  versions: SourceImageVersion[]
-  value: string
-  onChange: (url: string) => void
+  mode: SourcePreviewMode
+  plateAvailable: boolean
+  onToggle: () => void
   className?: string
 }) {
-  const [open, setOpen] = useState(false)
-
-  if (versions.length <= 1) return null
-
-  const selectedVersion = versions.find((version) => version.url === value) ?? versions[0]
-  const selectedFileName = getSourceImageFileName(selectedVersion)
-
-  const handleSelect = (url: string) => {
-    onChange(url)
-    setOpen(false)
-  }
-
+  const nextMode = mode === 'source' ? 'plate' : 'source'
+  const disabled = mode === 'source' && !plateAvailable
+  const label = mode === 'source' ? 'Source' : 'Plate'
   return (
-    <HoverCard.Root open={open} onOpenChange={setOpen} openDelay={120} closeDelay={160}>
-      <HoverCard.Trigger>
-        <button
-          type="button"
-          className={`flex h-6 max-w-48 items-center gap-1 rounded border border-white/15 bg-black/70 px-1.5 font-mono text-[10px] text-white/80 shadow-lg backdrop-blur-md transition hover:bg-white/10 hover:text-white ${className}`}
-          aria-label="Select source image"
-          title={selectedFileName}
-        >
-          <span className="truncate">{selectedFileName}</span>
-          <CaretDownIcon size={11} weight="bold" className="shrink-0" />
-        </button>
-      </HoverCard.Trigger>
-      <HoverCard.Content
-        align="end"
-        side="top"
-        sideOffset={8}
-        className="w-72 border border-white/15 bg-black/85 p-1 shadow-xl ring-1 ring-black/30 backdrop-blur-md"
+    <Tooltip
+      content={disabled ? 'No plate image found for this world version' : `Show ${nextMode}`}
+      delayDuration={0}
+      side="top"
+    >
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={onToggle}
+        className={`h-6 rounded border border-white/15 flex items-center gap-1 bg-black/70 px-1.5 font-mono text-[10px] tracking-wide text-white/80 shadow-lg backdrop-blur-md transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:text-white/25 disabled:hover:bg-black/70 ${className}`}
+        aria-label={`Showing ${label}. Toggle source or plate preview.`}
+        aria-pressed={mode === 'plate'}
       >
-        <div className="max-h-64 overflow-y-auto">
-          {versions.map((version) => {
-            const fileName = getSourceImageFileName(version)
-            const selected = version.url === value
-
-            return (
-              <button
-                key={version.url}
-                type="button"
-                onClick={() => handleSelect(version.url)}
-                className={`flex w-full items-center rounded px-2 py-1.5 text-left font-mono text-[11px] transition ${
-                  selected ? 'bg-white/15 text-white' : 'text-white/75 hover:bg-white/10 hover:text-white'
-                }`}
-                aria-current={selected}
-                title={fileName}
-              >
-                <span className="truncate">{fileName}</span>
-              </button>
-            )
-          })}
-        </div>
-      </HoverCard.Content>
-    </HoverCard.Root>
+        <ImageIcon size={14} weight="regular" />
+        {label}
+      </button>
+    </Tooltip>
   )
-}
-
-function getSourceImageFileName(version: SourceImageVersion) {
-  const fileName = version.fileName || version.url.split('/').slice(-1)[0] || version.label
-
-  try {
-    return decodeURIComponent(fileName)
-  } catch {
-    return fileName
-  }
 }
 
 function HotReloadButton({
