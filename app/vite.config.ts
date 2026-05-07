@@ -19,6 +19,7 @@ type ProjectManifest = Record<string, unknown> & {
   display_name?: string
   created_at?: string
   updated_at?: string
+  notes?: string
 }
 
 type FileWithName = { name: string }
@@ -276,32 +277,6 @@ function worldsPlugin(): Plugin {
     }
   }
 
-  function fallbackWorldFromProject(slug: string, project: ProjectManifest): WorldManifest {
-    return {
-      world_id: project.slug ?? slug,
-      display_name: project.display_name ?? displayNameFromSlug(slug),
-      world_marble_url: '',
-      tags: null,
-      world_prompt: null,
-      created_at: project.created_at ?? null,
-      updated_at: project.updated_at ?? null,
-      assets: {
-        mesh: { collider_mesh_url: '' },
-        imagery: { pano_url: '' },
-        splats: {
-          spz_urls: {},
-          semantics_metadata: {
-            metric_scale_factor: 1,
-            ground_plane_offset: 0,
-            flip_y: true,
-          },
-        },
-        thumbnail_url: '',
-        caption: '',
-      },
-    }
-  }
-
   function withLocalWorldAssets(slug: string, world: WorldManifest, index?: number) {
     const files = visibleFiles(path.join(worldsDir, slug, 'output', 'world'))
     const existingSpzUrls = world.assets?.splats?.spz_urls ?? {}
@@ -483,10 +458,17 @@ function worldsPlugin(): Plugin {
         const manifest = readWorldManifest(slug)
         const worldVersions = readWorldVersions(slug)
         const defaultWorld = worldVersions[worldVersions.length - 1]?.world
-          ?? (manifest ? withLocalWorldAssets(slug, manifest.world, manifest.index) : fallbackWorldFromProject(slug, project))
+          ?? (manifest ? withLocalWorldAssets(slug, manifest.world, manifest.index) : undefined)
         return [{
           slug,
-          world: defaultWorld,
+          project: {
+            slug: project.slug ?? slug,
+            display_name: project.display_name ?? displayNameFromSlug(slug),
+            ...(project.created_at ? { created_at: project.created_at } : {}),
+            ...(project.updated_at ? { updated_at: project.updated_at } : {}),
+            ...(project.notes ? { notes: project.notes } : {}),
+          },
+          ...(defaultWorld ? { world: defaultWorld } : {}),
           worldVersions,
           objectAssets: readObjectAssets(slug),
           allObjectAssets: [],

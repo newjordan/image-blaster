@@ -29,6 +29,14 @@ export interface World {
   updated_at: string | null
 }
 
+export interface WorldProject {
+  slug: string
+  display_name?: string
+  created_at?: string
+  updated_at?: string
+  notes?: string
+}
+
 export interface WorldObjectAsset {
   id: string
   assetId: string
@@ -87,7 +95,8 @@ export interface SourceImageVersion {
 
 export interface WorldEntry {
   slug: string
-  world: World
+  project: WorldProject
+  world?: World
   worldVersions: WorldVersion[]
   objectAssets: WorldObjectAsset[]
   allObjectAssets: WorldObjectAsset[]

@@ -98,15 +98,15 @@ export function WorldSidebar({
       >
         <div className="w-full min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
           <div className="flex min-w-0 flex-col gap-1 pr-1">
-            {worlds.map(({ slug, world, worldVersions, objectAssets, sceneProject }) => {
+            {worlds.map(({ slug, project, world, worldVersions, objectAssets, sceneProject }) => {
               const isActive = slug === activeSlug
-              const name = world.display_name || slug
+              const name = project.display_name || slug
               const projectLoaded = isActive ? activeSceneProject : sceneProject
               const latestVersion = worldVersions[worldVersions.length - 1]
               const selectedVersionIndex = isActive ? activeWorldVersionIndex : latestVersion?.index
               const selectedVersion = worldVersions.find((version) => version.index === selectedVersionIndex) ?? latestVersion
               const displayWorld = selectedVersion?.world ?? world
-              const hasSplatFile = Object.values(displayWorld.assets.splats.spz_urls).some(Boolean)
+              const hasSplatFile = Boolean(displayWorld && Object.values(displayWorld.assets.splats.spz_urls).some(Boolean))
               return (
                 <div key={slug} className="rounded">
                   <div

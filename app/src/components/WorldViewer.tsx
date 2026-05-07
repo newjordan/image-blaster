@@ -24,6 +24,11 @@ import { chrome } from './AppChrome'
 type CharHandle = CharacterControllerHandle | FlyControllerHandle
 type SourcePreviewMode = 'source' | 'plate'
 const DEFAULT_ENVIRONMENT_URL = '/hdri.jpg'
+const DEFAULT_WORLD_SEMANTICS = {
+  metric_scale_factor: 1,
+  ground_plane_offset: 0,
+  flip_y: true,
+}
 
 function sunPositionFromRotation(rotation: Vec3Tuple): Vec3Tuple {
   let x = 0
@@ -98,7 +103,7 @@ function DefaultEnvironment({ intensity }: { intensity: number }) {
 }
 
 interface Props {
-  world: World
+  world?: World
   slug: string
   sourceImageUrl?: string
   plateImageUrl?: string
@@ -148,10 +153,10 @@ export function WorldViewer({
   const sunColor = useDebugStore((s) => s.sunColor)
   const [sourceThumbnailCollapsed, setSourceThumbnailCollapsed] = useState(false)
   const [sourcePreviewMode, setSourcePreviewMode] = useState<SourcePreviewMode>('source')
-  const colliderUrl = desiredWorld.assets.mesh.collider_mesh_url.startsWith('/worlds/')
+  const colliderUrl = desiredWorld?.assets.mesh.collider_mesh_url.startsWith('/worlds/')
     ? desiredWorld.assets.mesh.collider_mesh_url
     : ''
-  const panoUrl = desiredWorld.assets.imagery.pano_url.startsWith('/worlds/')
+  const panoUrl = desiredWorld?.assets.imagery.pano_url.startsWith('/worlds/')
     ? desiredWorld.assets.imagery.pano_url
     : ''
 
@@ -167,8 +172,8 @@ export function WorldViewer({
     if (!plateImageUrl && sourcePreviewMode === 'plate') setSourcePreviewMode('source')
   }, [plateImageUrl, sourcePreviewMode])
 
-  const splatUrl = getSplatUrl(desiredWorld)
-  const { ground_plane_offset, flip_y, metric_scale_factor } = desiredWorld.assets.splats.semantics_metadata
+  const splatUrl = desiredWorld ? getSplatUrl(desiredWorld) : ''
+  const { ground_plane_offset, flip_y, metric_scale_factor } = desiredWorld?.assets.splats.semantics_metadata ?? DEFAULT_WORLD_SEMANTICS
   const flipY = flip_y ?? true
   const baseMetricScaleFactor = metric_scale_factor ?? 1
   const isHighQuality = viewerQuality === ViewerQuality.High
