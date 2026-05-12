@@ -123,7 +123,6 @@ async function promptFromImageJson(world) {
 
   return [
     imageJson.scene_name,
-    imageJson.short_caption,
     imageJson.literal_description,
     imageJson.environment,
     imageJson.visual_style,

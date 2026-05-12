@@ -16,7 +16,8 @@ Create one clean plate for project `$0`.
 - Select the source image from `$ARGUMENTS` when provided; otherwise use the newest visible source image in `worlds/$0/source/`.
 - Build one removal prompt from confirmed objects plus any extra removal instructions. Confirmed objects are `worlds/$0/output/<object>/object.json` files; use `object.name`, adding short details from `object.description` when needed.
 - Remove all requested content in one image edit pass. Do not split removals across multiple agents or one edit per object.
-- Follow `image-blast-edit` by calling the generic edit script with `--role plate` and `--output-slug "<source-slug>-plate"`.
+- Follow `image-blast-image-edit` by calling the generic edit script with `--role plate` and `--output-slug "<source-slug>-plate"`.
+- The plate is a new source artifact. It must use the next available visible file index in `worlds/$0/source/`, not the source image's index. For example, if the selected source image is `0-room.png`, the first plate must be named like `1-room-plate.png` with matching `.1-room-plate-request.json`, never `0-room-plate.png`.
 
 ```bash
 node .claude/scripts/project/project-state.mjs --world "$0"

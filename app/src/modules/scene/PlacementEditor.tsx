@@ -38,6 +38,7 @@ interface EditorStateArgs {
   allObjectAssets: WorldObjectAsset[]
   sceneProject?: WorldSceneProject
   baseMetricScaleFactor: number
+  baseGroundPlaneOffset: number
   sceneProjectReady: boolean
   editing: boolean
   hoveredObjectAssetId?: string | null
@@ -105,6 +106,9 @@ export interface PlacementEditorController {
   metricScaleFactor: number
   resetMetricScaleFactor: () => void
   updateMetricScaleFactor: (metricScaleFactor: number) => void
+  groundPlaneOffset: number
+  resetGroundPlaneOffset: () => void
+  updateGroundPlaneOffset: (groundPlaneOffset: number) => void
   undo: () => void
   redo: () => void
   resetEdits: () => void
@@ -116,6 +120,7 @@ export interface PlacementEditorController {
 const HISTORY_LIMIT = 80
 const PASTE_OFFSET: [number, number, number] = [0.25, 0, 0.25]
 const ROTATION_SNAP_DEGREES = 5
+const VALUE_EPSILON = 0.0005
 const projectVersion = 1
 const DEFAULT_SCENE_SUN: WorldSceneSun = { intensity: 1, rotation: [0, 0, 0], environmentIntensity: 2 }
 const TRANSFORM_FIELDS: Array<{ field: TransformField; label: string; step: number }> = [
@@ -149,6 +154,11 @@ function cloneSun(sun: WorldSceneSun = DEFAULT_SCENE_SUN): WorldSceneSun {
 
 function signature(value: unknown) {
   return JSON.stringify(value)
+}
+
+function scaledGroundPlaneOffset(baseGroundPlaneOffset: number, metricScaleFactor: number, baseMetricScaleFactor: number) {
+  const divisor = baseMetricScaleFactor || 1
+  return baseGroundPlaneOffset * (metricScaleFactor / divisor)
 }
 
 function asTuple(vector: THREE.Vector3): [number, number, number] {
@@ -372,6 +382,7 @@ export function usePlacementEditor({
   allObjectAssets,
   sceneProject,
   baseMetricScaleFactor,
+  baseGroundPlaneOffset,
   sceneProjectReady,
   editing,
   hoveredObjectAssetId,
@@ -385,6 +396,8 @@ export function usePlacementEditor({
   )
   const initialSun = useMemo(() => cloneSun(sceneProject?.sun), [sceneProject])
   const initialMetricScaleFactor = sceneProject?.metricScaleFactor ?? baseMetricScaleFactor
+  const initialGroundPlaneOffset = sceneProject?.groundPlaneOffset ??
+    scaledGroundPlaneOffset(baseGroundPlaneOffset, initialMetricScaleFactor, baseMetricScaleFactor)
   const [assetFilter, setAssetFilter] = useState<'world' | 'all'>('world')
   const visibleAssetLibrary = assetFilter === 'world'
     ? allObjectAssets.filter((asset) => asset.sourceWorldSlug === slug)
@@ -398,6 +411,7 @@ export function usePlacementEditor({
   const [instances, setInstances] = useState(() => clonePlacements(initialPlacements))
   const [sun, setSun] = useState(() => cloneSun(initialSun))
   const [metricScaleFactor, setMetricScaleFactor] = useState(initialMetricScaleFactor)
+  const [groundPlaneOffset, setGroundPlaneOffset] = useState(initialGroundPlaneOffset)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [mode, setMode] = useState<TransformMode>('translate')
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
@@ -408,6 +422,7 @@ export function usePlacementEditor({
   const instancesRef = useRef(instances)
   const sunRef = useRef(sun)
   const metricScaleFactorRef = useRef(metricScaleFactor)
+  const groundPlaneOffsetRef = useRef(groundPlaneOffset)
   const dropSelectedToFloorHandlerRef = useRef<(() => void) | null>(null)
   const flushSelectedTransformHandlerRef = useRef<(() => WorldObjectPlacement[] | null) | null>(null)
 
@@ -417,7 +432,8 @@ export function usePlacementEditor({
   )
   const dirty = signature(instances) !== signature(initialPlacements) ||
     signature(sun) !== signature(initialSun) ||
-    metricScaleFactor !== initialMetricScaleFactor
+    metricScaleFactor !== initialMetricScaleFactor ||
+    groundPlaneOffset !== initialGroundPlaneOffset
   const canUndo = historyRef.current.past.length > 0
   const canRedo = historyRef.current.future.length > 0
 
@@ -425,6 +441,7 @@ export function usePlacementEditor({
   selectedIdRef.current = selectedId
   sunRef.current = sun
   metricScaleFactorRef.current = metricScaleFactor
+  groundPlaneOffsetRef.current = groundPlaneOffset
 
   const pushHistory = useCallback((snapshot: WorldObjectPlacement[]) => {
     historyRef.current.past = [...historyRef.current.past, clonePlacements(snapshot)].slice(-HISTORY_LIMIT)
@@ -449,7 +466,8 @@ export function usePlacementEditor({
       loadedSlugRef.current === slug &&
       nextSignature === signature(instancesRef.current) &&
       signature(nextSun) === signature(sunRef.current) &&
-      initialMetricScaleFactor === metricScaleFactorRef.current
+      initialMetricScaleFactor === metricScaleFactorRef.current &&
+      initialGroundPlaneOffset === groundPlaneOffsetRef.current
     ) {
       return
     }
@@ -457,10 +475,11 @@ export function usePlacementEditor({
     setInstances(next)
     setSun(nextSun)
     setMetricScaleFactor(initialMetricScaleFactor)
+    setGroundPlaneOffset(initialGroundPlaneOffset)
     setSelectedId(null)
     historyRef.current = { past: [], future: [] }
     setSaveStatus('idle')
-  }, [initialMetricScaleFactor, initialPlacements, initialSun, slug])
+  }, [initialGroundPlaneOffset, initialMetricScaleFactor, initialPlacements, initialSun, slug])
 
   const commitInstances = useCallback((next: WorldObjectPlacement[]) => {
     if (signature(next) === signature(instancesRef.current)) return
@@ -620,18 +639,42 @@ export function usePlacementEditor({
     })
   }, [])
 
+  const defaultGroundPlaneOffset = useCallback((metricScaleFactor: number) => (
+    scaledGroundPlaneOffset(baseGroundPlaneOffset, metricScaleFactor, baseMetricScaleFactor)
+  ), [baseGroundPlaneOffset, baseMetricScaleFactor])
+
   const updateMetricScaleFactor = useCallback((nextMetricScaleFactor: number) => {
     if (!Number.isFinite(nextMetricScaleFactor) || nextMetricScaleFactor <= 0) return
+    const previousMetricScaleFactor = metricScaleFactorRef.current
     setMetricScaleFactor((current) => {
       if (current === nextMetricScaleFactor) return current
       setSaveStatus('idle')
       return nextMetricScaleFactor
     })
-  }, [])
+    setGroundPlaneOffset((current) => {
+      const previousDefault = defaultGroundPlaneOffset(previousMetricScaleFactor)
+      if (Math.abs(current - previousDefault) > VALUE_EPSILON) return current
+      const nextDefault = defaultGroundPlaneOffset(nextMetricScaleFactor)
+      return current === nextDefault ? current : nextDefault
+    })
+  }, [defaultGroundPlaneOffset])
 
   const resetMetricScaleFactor = useCallback(() => {
     updateMetricScaleFactor(baseMetricScaleFactor)
   }, [baseMetricScaleFactor, updateMetricScaleFactor])
+
+  const updateGroundPlaneOffset = useCallback((nextGroundPlaneOffset: number) => {
+    if (!Number.isFinite(nextGroundPlaneOffset)) return
+    setGroundPlaneOffset((current) => {
+      if (current === nextGroundPlaneOffset) return current
+      setSaveStatus('idle')
+      return nextGroundPlaneOffset
+    })
+  }, [])
+
+  const resetGroundPlaneOffset = useCallback(() => {
+    updateGroundPlaneOffset(defaultGroundPlaneOffset(metricScaleFactorRef.current))
+  }, [defaultGroundPlaneOffset, updateGroundPlaneOffset])
 
   const undo = useCallback(() => {
     const snapshot = historyRef.current.past[historyRef.current.past.length - 1]
@@ -655,8 +698,9 @@ export function usePlacementEditor({
     updateInstances(() => clonePlacements(initialPlacements))
     setSun(cloneSun(initialSun))
     setMetricScaleFactor(initialMetricScaleFactor)
+    setGroundPlaneOffset(initialGroundPlaneOffset)
     setSelectedId(null)
-  }, [initialMetricScaleFactor, initialPlacements, initialSun, updateInstances])
+  }, [initialGroundPlaneOffset, initialMetricScaleFactor, initialPlacements, initialSun, updateInstances])
 
   const openWorldFolder = useCallback(() => {
     if (!import.meta.env.DEV) return
@@ -674,6 +718,7 @@ export function usePlacementEditor({
         instances: clonePlacements(flushedInstances ?? instancesRef.current),
         sun: cloneSun(sunRef.current),
         metricScaleFactor: metricScaleFactorRef.current,
+        groundPlaneOffset: groundPlaneOffsetRef.current,
       }
       setSaveStatus('saving')
       const response = await fetch(`/__scene-project?slug=${encodeURIComponent(slug)}`, {
@@ -685,7 +730,10 @@ export function usePlacementEditor({
       const savedProject = await response.json() as WorldSceneProject
       setInstances(clonePlacements(savedProject.instances))
       setSun(cloneSun(savedProject.sun))
-      setMetricScaleFactor(savedProject.metricScaleFactor ?? baseMetricScaleFactor)
+      const savedMetricScaleFactor = savedProject.metricScaleFactor ?? baseMetricScaleFactor
+      setMetricScaleFactor(savedMetricScaleFactor)
+      setGroundPlaneOffset(savedProject.groundPlaneOffset ??
+        scaledGroundPlaneOffset(baseGroundPlaneOffset, savedMetricScaleFactor, baseMetricScaleFactor))
       onProjectSaved?.(savedProject)
       setSaveStatus('saved')
       return true
@@ -694,7 +742,7 @@ export function usePlacementEditor({
       setSaveStatus('error')
       return false
     }
-  }, [baseMetricScaleFactor, onProjectSaved, slug])
+  }, [baseGroundPlaneOffset, baseMetricScaleFactor, onProjectSaved, slug])
 
   useEffect(() => {
     if (!editing || !sceneProjectReady || sceneProject || !objects.length || !import.meta.env.DEV) return
@@ -703,6 +751,7 @@ export function usePlacementEditor({
       instances: clonePlacements(initialPlacements),
       sun: cloneSun(initialSun),
       metricScaleFactor: initialMetricScaleFactor,
+      groundPlaneOffset: initialGroundPlaneOffset,
     }
     fetch(`/__scene-project?slug=${encodeURIComponent(slug)}`, {
       method: 'POST',
@@ -717,7 +766,7 @@ export function usePlacementEditor({
       .catch((error) => {
         console.warn('Failed to initialize scene project.', error)
       })
-  }, [editing, initialMetricScaleFactor, initialPlacements, initialSun, objects.length, onProjectSaved, sceneProject, sceneProjectReady, slug])
+  }, [editing, initialGroundPlaneOffset, initialMetricScaleFactor, initialPlacements, initialSun, objects.length, onProjectSaved, sceneProject, sceneProjectReady, slug])
 
   useEffect(() => {
     if (!editing || !dirty) return
@@ -827,6 +876,9 @@ export function usePlacementEditor({
     metricScaleFactor,
     resetMetricScaleFactor,
     updateMetricScaleFactor,
+    groundPlaneOffset,
+    resetGroundPlaneOffset,
+    updateGroundPlaneOffset,
     undo,
     redo,
     resetEdits,
@@ -1181,6 +1233,23 @@ export function PlacementEditorOverlay({ controller }: PlacementEditorOverlayPro
                 className="h-6 px-1.5 py-0 text-[10px] text-white/55"
                 aria-label="Reset world scale"
                 title="Reset world scale"
+              >
+                Reset
+              </AppButton>
+            </div>
+            <div className="grid grid-cols-[2.75rem_1fr_auto] items-center gap-1">
+              <span className="text-[10px] tracking-[0.16em] text-white/40">Ground</span>
+              <NumberValueInput
+                value={controller.groundPlaneOffset}
+                step={0.01}
+                onChange={controller.updateGroundPlaneOffset}
+                className="h-6 text-[11px]"
+              />
+              <AppButton
+                onClick={controller.resetGroundPlaneOffset}
+                className="h-6 px-1.5 py-0 text-[10px] text-white/55"
+                aria-label="Reset ground offset"
+                title="Reset ground offset"
               >
                 Reset
               </AppButton>

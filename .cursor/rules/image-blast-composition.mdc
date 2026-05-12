@@ -12,7 +12,7 @@ alwaysApply: true
 - Keep durable JSON tiny. Store identity, user-authored intent, provenance, and API inputs that cannot be inferred from files. Do not duplicate generated file lists, counts, stages, completion status, or request lifecycle in central JSON or `object.json`.
 - Avoid helper creep. Do not add directory-specific snapshot helpers or wrappers for simple operations an agent can infer from `ls -a`, indexed filenames, and small JSON files. Keep helpers generic, rare, and clearly worth their complexity.
 - For paid or long-running requests, persist request IDs before polling in colocated hidden request JSON. Request metadata should be compact, sanitized, and named with the indexed convention `.N-slug-request.json`.
-- Invoke generation through matching background agents, not parallel Skill calls: `Agent(image-blast-world)`, `Agent(image-blast-3d)`, `Agent(image-blast-sfx)`, `Agent(image-blast-plate)`, or `Agent(image-blast-edit)`.
+- Invoke generation through matching background agents, not parallel Skill calls: `Agent(image-blast-world)`, `Agent(image-blast-3d)`, `Agent(image-blast-sfx)`, `Agent(image-blast-plate)`, or `Agent(image-blast-image-edit)`.
 - Align generated artifacts with request indexes so related files are easy to inspect together, such as `0-object.png`, `0-object.glb`, `.0-object__image-request.json`, and `.0-object__model-request.json`.
 - Read request semantics like `kind`, `role`, provider, and status from JSON contents, not from filename suffixes.
 - Do not preserve compatibility with unshipped branch state. If a JSON shape is wrong or bloated, replace it outright instead of layering legacy shims.

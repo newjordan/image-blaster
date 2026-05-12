@@ -113,7 +113,7 @@ export async function generateEdit(options) {
   if (!slug) throw new Error("--output-slug or --role must produce a usable slug.");
 
   const activeRequest = (await requestMetadataFiles(outputDir, { slug })).find(isActiveRequest);
-  const outputIndex = activeRequest?.index ?? await nextIndex(outputDir, slug);
+  const outputIndex = activeRequest?.index ?? await nextIndex(outputDir);
   const extension = `.${String(outputFormat).replace(/^\./, "") || "png"}`;
   const outputPath = artifactPath(outputDir, outputIndex, slug, extension);
   const metadataPath = activeRequest?.path ?? requestPath(outputDir, outputIndex, slug);

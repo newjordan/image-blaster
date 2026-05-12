@@ -76,6 +76,7 @@ export interface WorldSceneProject {
   instances: WorldObjectPlacement[]
   sun?: WorldSceneSun
   metricScaleFactor?: number
+  groundPlaneOffset?: number
 }
 
 export interface WorldVersion {

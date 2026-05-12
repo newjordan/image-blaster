@@ -176,6 +176,7 @@ export function WorldViewer({
   const { ground_plane_offset, flip_y, metric_scale_factor } = desiredWorld?.assets.splats.semantics_metadata ?? DEFAULT_WORLD_SEMANTICS
   const flipY = flip_y ?? true
   const baseMetricScaleFactor = metric_scale_factor ?? 1
+  const baseGroundPlaneOffset = ground_plane_offset ?? 0
   const isHighQuality = viewerQuality === ViewerQuality.High
   const showScene = worldRenderMode !== WorldRenderMode.ObjectOnly
   const showSplat = showScene && objectRenderMode === ObjectRenderMode.Lit
@@ -187,6 +188,7 @@ export function WorldViewer({
     allObjectAssets,
     sceneProject,
     baseMetricScaleFactor,
+    baseGroundPlaneOffset,
     sceneProjectReady,
     editing,
     hoveredObjectAssetId,
@@ -199,7 +201,10 @@ export function WorldViewer({
   const activeEnvironmentIntensity = activeSceneSun?.environmentIntensity ?? environmentIntensity
   const activeSunPosition = sunPositionFromRotation(activeSceneSun?.rotation ?? [0, 0, 0])
   const activeMetricScaleFactor = editing ? placementEditor.metricScaleFactor : sceneProject?.metricScaleFactor ?? baseMetricScaleFactor
-  const activeGroundPlaneOffset = ground_plane_offset * (activeMetricScaleFactor / baseMetricScaleFactor)
+  const defaultGroundPlaneOffset = baseGroundPlaneOffset * (activeMetricScaleFactor / baseMetricScaleFactor)
+  const activeGroundPlaneOffset = editing
+    ? placementEditor.groundPlaneOffset
+    : sceneProject?.groundPlaneOffset ?? defaultGroundPlaneOffset
   const objectPlacements = sceneProject?.instances ?? placementEditor.instances
   const objectPhysicsAssets = sceneProject?.instances.length ? allObjectAssets : desiredObjectAssets
   const activeControllerMode = editing ? 'fly' : controllerMode

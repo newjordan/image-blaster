@@ -69,4 +69,4 @@ node .claude/scripts/project/show-folder.mjs input
    - `Agent(image-blast-world)` for static 3D environment world generation
    - `Agent(image-blast-3d)` per object 3D generation
    - `Agent(image-blast-sfx)` for ambient, object-impact, or arbitrary sound effects
-   - `Agent(image-blast-edit)` for generic standalone prompt-based image editing
+   - `Agent(image-blast-image-edit)` for generic standalone prompt-based image editing

@@ -406,12 +406,14 @@ function worldsPlugin(): Plugin {
       }
     })()
     const metricScaleFactor = record.metricScaleFactor
+    const groundPlaneOffset = record.groundPlaneOffset
 
     return {
       version: PROJECT_VERSION,
       instances,
       ...(sun ? { sun } : {}),
       ...(typeof metricScaleFactor === 'number' && Number.isFinite(metricScaleFactor) ? { metricScaleFactor } : {}),
+      ...(typeof groundPlaneOffset === 'number' && Number.isFinite(groundPlaneOffset) ? { groundPlaneOffset } : {}),
     }
   }
 
