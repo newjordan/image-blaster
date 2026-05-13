@@ -1,6 +1,6 @@
 import { Component, Suspense, useRef, useEffect, useState, type ReactNode } from 'react'
 import { Tooltip } from '@radix-ui/themes'
-import { ArrowsClockwiseIcon, CaretDownIcon, CaretUpIcon, ImageIcon } from '@phosphor-icons/react'
+import { ArrowsClockwiseIcon, CaretDownIcon, CaretUpIcon } from '@phosphor-icons/react'
 import { Canvas } from '@react-three/fiber'
 import { Physics } from '@react-three/rapier'
 import { SplatRenderer } from '../modules/splat/SplatRenderer'
@@ -17,12 +17,11 @@ import { AudioManager } from '../modules/audio/AudioManager'
 import { PostProcessing } from '../modules/postprocessing/PostProcessing'
 import { getSplatUrl } from '../utils/worldLoader'
 import { useDebugStore } from '../store/debug'
-import { WorldRenderMode, ObjectRenderMode, ViewerQuality, type Vec3Tuple, type World, type WorldObjectAsset, type WorldSceneProject } from '../types/world'
+import { WorldRenderMode, ObjectRenderMode, ViewerQuality, type Vec3Tuple, type World, type WorldHoverPreview, type WorldObjectAsset, type WorldSceneProject } from '../types/world'
 import { AppButton } from './AppButton'
 import { chrome } from './AppChrome'
 
 type CharHandle = CharacterControllerHandle | FlyControllerHandle
-type SourcePreviewMode = 'source' | 'plate'
 const DEFAULT_ENVIRONMENT_URL = '/hdri.jpg'
 const DEFAULT_WORLD_SEMANTICS = {
   metric_scale_factor: 1,
@@ -106,7 +105,7 @@ interface Props {
   world?: World
   slug: string
   sourceImageUrl?: string
-  plateImageUrl?: string
+  hoveredWorldPreview?: WorldHoverPreview | null
   objectAssets: WorldObjectAsset[]
   allObjectAssets: WorldObjectAsset[]
   worldSfxUrls: string[]
@@ -126,7 +125,7 @@ export function WorldViewer({
   world: desiredWorld,
   slug: desiredSlug,
   sourceImageUrl,
-  plateImageUrl,
+  hoveredWorldPreview,
   objectAssets: desiredObjectAssets,
   allObjectAssets,
   worldSfxUrls,
@@ -152,7 +151,6 @@ export function WorldViewer({
   const sunIntensity = useDebugStore((s) => s.sunIntensity)
   const sunColor = useDebugStore((s) => s.sunColor)
   const [sourceThumbnailCollapsed, setSourceThumbnailCollapsed] = useState(false)
-  const [sourcePreviewMode, setSourcePreviewMode] = useState<SourcePreviewMode>('source')
   const colliderUrl = desiredWorld?.assets.mesh.collider_mesh_url.startsWith('/worlds/')
     ? desiredWorld.assets.mesh.collider_mesh_url
     : ''
@@ -168,10 +166,6 @@ export function WorldViewer({
     if (controllerResetToken > 0) charRef.current?.reset()
   }, [controllerResetToken])
 
-  useEffect(() => {
-    if (!plateImageUrl && sourcePreviewMode === 'plate') setSourcePreviewMode('source')
-  }, [plateImageUrl, sourcePreviewMode])
-
   const splatUrl = desiredWorld ? getSplatUrl(desiredWorld) : ''
   const { ground_plane_offset, flip_y, metric_scale_factor } = desiredWorld?.assets.splats.semantics_metadata ?? DEFAULT_WORLD_SEMANTICS
   const flipY = flip_y ?? true
@@ -181,7 +175,6 @@ export function WorldViewer({
   const showScene = worldRenderMode !== WorldRenderMode.ObjectOnly
   const showSplat = showScene && objectRenderMode === ObjectRenderMode.Lit
   const showObjects = worldRenderMode !== WorldRenderMode.SplatOnly
-  const activeSourceImageUrl = sourcePreviewMode === 'plate' && plateImageUrl ? plateImageUrl : sourceImageUrl
   const placementEditor = usePlacementEditor({
     slug: desiredSlug,
     objects: desiredObjectAssets,
@@ -212,11 +205,14 @@ export function WorldViewer({
     ? allObjectAssets.find((asset) => asset.assetId === hoveredObjectAssetId)
       ?? desiredObjectAssets.find((asset) => asset.assetId === hoveredObjectAssetId)
     : undefined
-  const activePreviewImageUrl = hoveredObjectAsset?.referenceImageUrl ?? hoveredObjectAsset?.thumbnailUrl ?? activeSourceImageUrl
+  const activePreviewImageUrl = hoveredObjectAsset?.referenceImageUrl
+    ?? hoveredObjectAsset?.thumbnailUrl
+    ?? hoveredWorldPreview?.imageUrl
+    ?? sourceImageUrl
   const activePreviewAlt = hoveredObjectAsset
     ? `${hoveredObjectAsset.name} reference image`
-    : sourcePreviewMode === 'plate' && plateImageUrl
-      ? 'World generation plate'
+    : hoveredWorldPreview?.imageUrl
+      ? hoveredWorldPreview.alt
       : 'Original source'
   return (
     <>
@@ -306,14 +302,10 @@ export function WorldViewer({
       {uiVisible && (
         <SourceImageControls
           activeSourceImageUrl={activePreviewImageUrl}
-          previewMode={sourcePreviewMode}
           previewAlt={activePreviewAlt}
-          plateImageUrl={plateImageUrl}
-          objectPreviewActive={Boolean(hoveredObjectAsset)}
           thumbnailCollapsed={sourceThumbnailCollapsed}
           refreshingWorlds={refreshingWorlds}
           onRefreshWorlds={onRefreshWorlds}
-          onPreviewModeToggle={() => setSourcePreviewMode((mode) => mode === 'source' ? 'plate' : 'source')}
           onThumbnailCollapseToggle={() => setSourceThumbnailCollapsed((collapsed) => !collapsed)}
         />
       )}
@@ -324,25 +316,17 @@ export function WorldViewer({
 
 function SourceImageControls({
   activeSourceImageUrl,
-  previewMode,
   previewAlt,
-  plateImageUrl,
-  objectPreviewActive,
   thumbnailCollapsed,
   refreshingWorlds,
   onRefreshWorlds,
-  onPreviewModeToggle,
   onThumbnailCollapseToggle,
 }: {
   activeSourceImageUrl?: string
-  previewMode: SourcePreviewMode
   previewAlt: string
-  plateImageUrl?: string
-  objectPreviewActive: boolean
   thumbnailCollapsed: boolean
   refreshingWorlds: boolean
   onRefreshWorlds?: () => void
-  onPreviewModeToggle: () => void
   onThumbnailCollapseToggle: () => void
 }) {
   if (!activeSourceImageUrl && !import.meta.env.DEV) return null
@@ -370,7 +354,7 @@ function SourceImageControls({
             <img
               src={activeSourceImageUrl}
               alt={previewAlt}
-              className="block w-96 object-cover"
+              className="block h-96 aspect-square object-cover"
               draggable={false}
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/30" />
@@ -379,14 +363,6 @@ function SourceImageControls({
                 <RefreshWorldsButton
                   refreshing={refreshingWorlds}
                   onRefresh={onRefreshWorlds}
-                  className="pointer-events-auto"
-                />
-              )}
-              {!objectPreviewActive && (
-                <SourcePlateToggleButton
-                  mode={previewMode}
-                  plateAvailable={Boolean(plateImageUrl)}
-                  onToggle={onPreviewModeToggle}
                   className="pointer-events-auto"
                 />
               )}
@@ -436,41 +412,6 @@ function SourceThumbnailCollapseButton({
       >
         <Icon size={15} weight="bold" />
       </AppButton>
-    </Tooltip>
-  )
-}
-
-function SourcePlateToggleButton({
-  mode,
-  plateAvailable,
-  onToggle,
-  className = '',
-}: {
-  mode: SourcePreviewMode
-  plateAvailable: boolean
-  onToggle: () => void
-  className?: string
-}) {
-  const nextMode = mode === 'source' ? 'plate' : 'source'
-  const disabled = mode === 'source' && !plateAvailable
-  const label = mode === 'source' ? 'Source' : 'Plate'
-  return (
-    <Tooltip
-      content={disabled ? 'No plate image found for this world version' : `Show ${nextMode}`}
-      delayDuration={0}
-      side="top"
-    >
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={onToggle}
-        className={`h-6 rounded border border-white/15 flex items-center gap-1 bg-black/70 px-1.5 font-mono text-[10px] tracking-wide text-white/80 shadow-lg backdrop-blur-md transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:text-white/25 disabled:hover:bg-black/70 ${className}`}
-        aria-label={`Showing ${label}. Toggle source or plate preview.`}
-        aria-pressed={mode === 'plate'}
-      >
-        <ImageIcon size={14} weight="regular" />
-        {label}
-      </button>
     </Tooltip>
   )
 }

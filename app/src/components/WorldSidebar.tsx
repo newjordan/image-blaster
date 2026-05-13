@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Tooltip } from '@radix-ui/themes'
 import { ButterflyIcon, CheckSquareIcon, FileTextIcon, FolderOpenIcon, GlobeHemisphereWestIcon, ListIcon, PencilSimpleIcon, QuestionMarkIcon, SquareIcon } from '@phosphor-icons/react'
 import { useLocation } from 'wouter'
-import type { WorldEntry, WorldObjectAsset, WorldSceneProject } from '../types/world'
+import type { WorldEntry, WorldHoverPreview, WorldObjectAsset, WorldSceneProject } from '../types/world'
 import { useDebugStore } from '../store/debug'
 import { AppButton } from './AppButton'
 import { ChromeThumbnail, chrome } from './AppChrome'
@@ -17,6 +17,7 @@ interface Props {
   hoveredObjectAssetId?: string | null
   hoveredObjectInstanceId?: string | null
   onObjectHover?: (asset: WorldObjectAsset, hovering: boolean, instanceId?: string) => void
+  onWorldHover?: (preview: WorldHoverPreview, hovering: boolean) => void
   onActiveWorldVersionChange: (index: number) => void
 }
 
@@ -30,6 +31,7 @@ export function WorldSidebar({
   hoveredObjectAssetId,
   hoveredObjectInstanceId,
   onObjectHover,
+  onWorldHover,
   onActiveWorldVersionChange,
 }: Props) {
   const [, navigate] = useLocation()
@@ -98,7 +100,7 @@ export function WorldSidebar({
       >
         <div className="w-full min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
           <div className="flex min-w-0 flex-col gap-1 pr-1">
-            {worlds.map(({ slug, project, world, worldVersions, objectAssets, sceneProject }) => {
+            {worlds.map(({ slug, project, world, worldVersions, objectAssets, sceneProject, sourceImageUrl }) => {
               const isActive = slug === activeSlug
               const name = project.display_name || slug
               const projectLoaded = isActive ? activeSceneProject : sceneProject
@@ -107,6 +109,16 @@ export function WorldSidebar({
               const selectedVersion = worldVersions.find((version) => version.index === selectedVersionIndex) ?? latestVersion
               const displayWorld = selectedVersion?.world ?? world
               const hasSplatFile = Boolean(displayWorld && Object.values(displayWorld.assets.splats.spz_urls).some(Boolean))
+              const sourcePreview: WorldHoverPreview = {
+                slug,
+                imageUrl: sourceImageUrl,
+                alt: `${name} source image`,
+              }
+              const activeWorldPreview: WorldHoverPreview = {
+                slug,
+                imageUrl: selectedVersion?.plateImageUrl ?? sourceImageUrl,
+                alt: selectedVersion?.plateImageUrl ? `${name} world generation image` : `${name} source image`,
+              }
               return (
                 <div key={slug} className="rounded">
                   <div
@@ -114,6 +126,12 @@ export function WorldSidebar({
                       min-w-0 flex items-center gap-1 rounded
                       ${isActive ? 'border-white/50 bg-white/20' : ''}
                     `}
+                    onMouseEnter={() => {
+                      if (!isActive) onWorldHover?.(sourcePreview, true)
+                    }}
+                    onMouseLeave={() => {
+                      if (!isActive) onWorldHover?.(sourcePreview, false)
+                    }}
                   >
                     <AppButton
                       onClick={() => selectWorld(slug)}
@@ -205,7 +223,11 @@ export function WorldSidebar({
                         </div>
                       )}
                       {hasSplatFile && (
-                        <div className="group flex min-w-0 items-center gap-1 rounded">
+                        <div
+                          className="group flex min-w-0 items-center gap-1 rounded"
+                          onMouseEnter={() => onWorldHover?.(activeWorldPreview, true)}
+                          onMouseLeave={() => onWorldHover?.(activeWorldPreview, false)}
+                        >
                           <div className="min-w-0 flex flex-1 items-center gap-2 rounded px-2 py-1 text-left text-white opacity-80">
                             <span className="relative flex h-7 w-7 flex-shrink-0 items-center justify-center rounded bg-white/10 text-white/45 ring-1 ring-white/10">
                               <GlobeHemisphereWestIcon size={14} weight="regular" />

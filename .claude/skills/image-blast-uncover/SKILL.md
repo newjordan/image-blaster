@@ -29,7 +29,9 @@ node .claude/scripts/project/show-folder.mjs input
 5. Analyze one source image at a time:
    - Read the image directly using agent image understanding.
    - Use literal, observational language only.
-   - Extract object candidates as single cleanly segmentable items only. Never group different items or create compound assets like furniture or tables with objects on top.
+   - Extract object candidates as single cleanly segmentable items only. A good separability test is whether a human could lift the item or move it by pushing it.
+   - Do not extract scene-surface elements or built-in parts of the environment, such as rugs, flooring, walls, or fixed architectural features.
+   - Never group different items or create compound assets, such as a combination of table with chairs, or table including the objects on top.
    - Write a sibling JSON file at `worlds/$0/source/<image-name>.json`.
    - Per-image JSON must use the same flat schema as root `image.json`.
    - Per-image JSON must not contain `images[]`.

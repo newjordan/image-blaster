@@ -94,6 +94,12 @@ export interface SourceImageVersion {
   index?: number
 }
 
+export interface WorldHoverPreview {
+  slug: string
+  imageUrl?: string
+  alt: string
+}
+
 export interface WorldEntry {
   slug: string
   project: WorldProject

@@ -22,7 +22,7 @@ Can take you from an image to a fully meshed 3D environment in < 5 minutes, grea
 2. Enter the directory with `cd image-blaster`
 3. Run `claude` (install with `curl -fsSL https://claude.ai/install.sh | bash`)
 4. Say hello to Claude, and give them your API key for [World Labs](https://platform.worldlabs.ai/) and [FAL](https://fal.ai/).
-5. Put an image into `input/` and ask Claude to `IMAGE-BLAST` it.
+5. Put an image into `input/` directory and ask Claude to `blast it and confirm each step with me`.
 
 ### Description
 

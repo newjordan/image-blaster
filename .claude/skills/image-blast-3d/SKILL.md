@@ -1,7 +1,7 @@
 ---
 name: image-blast-3d
 description: Generate one specified 3D object. Use when the user names exactly one object to make, or provides one image plus the object name/description.
-argument-hint: [world-name] [object-id/name or image path + object description] [--provider meshy|hunyuan] [--target-polycount N] [--face-count N] [--generate-type Normal|LowPoly|Geometry] [--polygon-type triangle|quadrilateral] [--enable-pbr true|false]
+argument-hint: [world-name] [object-id/name or image path + object description] [--provider meshy|hunyuan] [--regenerate] [--regenerate-reference] [--target-polycount N] [--face-count N] [--generate-type Normal|LowPoly|Geometry] [--polygon-type triangle|quadrilateral] [--enable-pbr true|false]
 allowed-tools: Read Write Glob Bash(ls *) Bash(node .claude/scripts/project/project-state.mjs *) Bash(node .claude/scripts/project/ensure-local-assets.mjs *) Bash(node .claude/scripts/asset-pipeline/generate-single-asset.mjs *)
 context: fork
 agent: image-blast-3d
@@ -46,7 +46,7 @@ Run the generator and wait for it to finish:
 node .claude/scripts/asset-pipeline/generate-single-asset.mjs --world "$0" --object-id "<object-id>"
 ```
 
-For iterative refinement, pass `--reference-only` to stop after the image-edit step. The script returns the reference image path and exits without calling the 3D provider. Inspect the reference (e.g. via `show-path.mjs --reveal`), and when the reference looks faithful to the source, call the script again without `--reference-only` to run only the 3D step from the existing reference.
+The first run may create a clean reference PNG with image edit. Later runs reuse the latest reference PNG by default, including `--regenerate` model runs. Use `--regenerate-reference` only when the user asks for a new extraction from the source image. For iterative refinement, pass `--reference-only` to stop after the image-edit step.
 
 If request metadata records provider URLs but local model or image files are missing, fill them from the matching hidden request JSON:
 
@@ -89,7 +89,7 @@ For Meshy-specific requests, pass the matching options:
 - `--enable-animation true|false`
 - `--enable-rigging true|false`
 
-For explicit regeneration, append `--regenerate`. For direct single-image generation, use:
+For explicit model regeneration from the existing reference, append `--regenerate`. For a new source extraction and model, append `--regenerate-reference`. For direct single-image generation, use:
 
 ```bash
 node .claude/scripts/asset-pipeline/generate-single-asset.mjs --world "$0" --image "<image-path>" --object-name "<object-name>" --description "<description>"

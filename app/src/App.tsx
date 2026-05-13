@@ -8,7 +8,7 @@ import { useSceneProject } from './modules/scene/useSceneProject'
 import { fetchWorlds, loadWorlds } from './utils/worldLoader'
 import { useDebugStore } from './store/debug'
 import { isEditableTarget } from './utils/dom'
-import type { WorldEntry, WorldObjectAsset } from './types/world'
+import type { WorldEntry, WorldHoverPreview, WorldObjectAsset } from './types/world'
 
 const LevaPanel = import.meta.env.DEV
   ? lazy(() => import('leva').then((module) => ({ default: module.Leva })))
@@ -91,6 +91,7 @@ function LoadedApp({
   const [selectedWorldVersions, setSelectedWorldVersions] = useState<Record<string, number>>({})
   const [hoveredObjectAssetId, setHoveredObjectAssetId] = useState<string | null>(null)
   const [hoveredObjectInstanceId, setHoveredObjectInstanceId] = useState<string | null>(null)
+  const [hoveredWorldPreview, setHoveredWorldPreview] = useState<WorldHoverPreview | null>(null)
 
   const slug = editParams?.slug ?? params?.slug ?? worlds[0].slug
   const entry = worlds.find((w) => w.slug === slug) ?? worlds[0]
@@ -107,6 +108,7 @@ function LoadedApp({
     setSceneProjectEnabled(true)
     setHoveredObjectAssetId(null)
     setHoveredObjectInstanceId(null)
+    setHoveredWorldPreview(null)
   }, [entry.slug])
 
   const handleObjectHover = useCallback((asset: WorldObjectAsset, hovering: boolean, instanceId?: string) => {
@@ -117,6 +119,13 @@ function LoadedApp({
     setHoveredObjectInstanceId((current) => {
       if (hovering) return instanceId ?? null
       return current === instanceId ? null : current
+    })
+  }, [])
+
+  const handleWorldHover = useCallback((preview: WorldHoverPreview, hovering: boolean) => {
+    setHoveredWorldPreview((current) => {
+      if (hovering) return preview
+      return current?.slug === preview.slug ? null : current
     })
   }, [])
 
@@ -154,7 +163,7 @@ function LoadedApp({
         world={activeWorld}
         slug={entry.slug}
         sourceImageUrl={entry.sourceImageUrl}
-        plateImageUrl={entry.worldVersions.find((version) => version.index === activeWorldVersionIndex)?.plateImageUrl}
+        hoveredWorldPreview={hoveredWorldPreview}
         objectAssets={entry.objectAssets}
         allObjectAssets={entry.allObjectAssets}
         worldSfxUrls={entry.worldSfxUrls}
@@ -182,6 +191,7 @@ function LoadedApp({
               hoveredObjectAssetId={hoveredObjectAssetId}
               hoveredObjectInstanceId={hoveredObjectInstanceId}
               onObjectHover={handleObjectHover}
+              onWorldHover={handleWorldHover}
               onActiveWorldVersionChange={(index) => setSelectedWorldVersions((versions) => ({
                 ...versions,
                 [entry.slug]: index,

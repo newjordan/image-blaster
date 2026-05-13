@@ -378,7 +378,8 @@ export async function generateSingleObject(options) {
     meshyEnableAnimation = DEFAULT_MESHY_ENABLE_ANIMATION,
     meshyEnableRigging = DEFAULT_MESHY_ENABLE_RIGGING,
     meshyEnablePbr = DEFAULT_MESHY_ENABLE_PBR,
-    referenceOnly = false
+    referenceOnly = false,
+    regenerateReference = false
   } = options;
 
   if (!world) throw new Error("world is required.");
@@ -394,6 +395,7 @@ export async function generateSingleObject(options) {
 
   const object = cleanObject(resolved.object, resolved.objectDir);
   const provider = resolve3DProvider(modelProvider || object.model_provider || DEFAULT_3D_PROVIDER);
+  const regenerateModel = regenerate || regenerateReference;
   await ensureDir(resolved.objectDir);
   await writeObjectIntent(resolved.objectJsonPath, world, object);
 
@@ -402,16 +404,16 @@ export async function generateSingleObject(options) {
     throw new Error(`Object ${object.id} does not have source images for image editing.`);
   }
 
-  const imageRequests = regenerate ? [] : await requestMetadataFiles(resolved.objectDir, object.id, "image");
-  const modelRequests = regenerate ? [] : await requestMetadataFiles(resolved.objectDir, object.id, "model");
+  const imageRequests = regenerateReference ? [] : await requestMetadataFiles(resolved.objectDir, object.id, "image");
+  const modelRequests = regenerateModel ? [] : await requestMetadataFiles(resolved.objectDir, object.id, "model");
   const activeImageRequest = latestByIndex(imageRequests.filter(isActiveRequest));
   const usableImageRequest = latestByIndex(imageRequests.filter(isUsableRequest));
   const activeModelRequest = latestByIndex(modelRequests.filter(isActiveRequest));
   const usableModelRequest = latestByIndex(modelRequests.filter(isUsableRequest));
-  const existingImage = regenerate ? undefined : await latestArtifact(resolved.objectDir, object.id, IMAGE_EXTENSIONS);
-  const existingModel = regenerate ? undefined : await latestArtifact(resolved.objectDir, object.id, MODEL_EXTENSIONS);
+  const existingImage = regenerateReference ? undefined : await latestArtifact(resolved.objectDir, object.id, IMAGE_EXTENSIONS);
+  const existingModel = regenerateModel ? undefined : await latestArtifact(resolved.objectDir, object.id, MODEL_EXTENSIONS);
 
-  if (existingModel && !activeModelRequest && !regenerate) {
+  if (existingModel && !activeModelRequest && !regenerateModel) {
     return {
       schema_version: 1,
       world,
@@ -426,16 +428,13 @@ export async function generateSingleObject(options) {
 
   const requestIndex =
     activeModelRequest?.index ??
-    activeImageRequest?.index ??
-    existingImage?.index ??
+    (existingImage ? undefined : activeImageRequest?.index) ??
+    (regenerateModel ? undefined : existingImage?.index) ??
     usableModelRequest?.index ??
-    usableImageRequest?.index ??
+    (existingImage ? undefined : usableImageRequest?.index) ??
     await nextIndex(resolved.objectDir, object.id);
 
-  let generatedImagePath =
-    existingImage && (!activeImageRequest || existingImage.index >= activeImageRequest.index)
-      ? existingImage.path
-      : undefined;
+  let generatedImagePath = existingImage?.path;
   let imageMetadataPath;
   let modelMetadataPath;
   let modelFiles = existingModel ? [existingModel.path] : [];
@@ -503,7 +502,7 @@ export async function generateSingleObject(options) {
       };
     }
 
-    const currentModel = regenerate ? undefined : await latestArtifact(resolved.objectDir, object.id, MODEL_EXTENSIONS);
+    const currentModel = regenerateModel ? undefined : await latestArtifact(resolved.objectDir, object.id, MODEL_EXTENSIONS);
     if (!currentModel || activeModelRequest) {
       const modelRequest =
         activeModelRequest && activeModelRequest.index === requestIndex
@@ -593,7 +592,7 @@ async function main() {
 
   if (!world || (!objectId && !directImage)) {
     throw new Error(
-      "Usage: node generate-single-asset.mjs --world <world-name> (--object-id <object-id> | --image <path>) [--object-name <name>] [--description <text>] [--provider hunyuan|meshy] [--regenerate] [--reference-only] [--face-count <40000-1500000>] [--generate-type Normal|LowPoly|Geometry] [--polygon-type triangle|quadrilateral] [--target-polycount 30000] [--enable-pbr true|false]"
+      "Usage: node generate-single-asset.mjs --world <world-name> (--object-id <object-id> | --image <path>) [--object-name <name>] [--description <text>] [--provider hunyuan|meshy] [--regenerate] [--regenerate-reference] [--reference-only] [--face-count <40000-1500000>] [--generate-type Normal|LowPoly|Geometry] [--polygon-type triangle|quadrilateral] [--target-polycount 30000] [--enable-pbr true|false]"
     );
   }
 
@@ -604,6 +603,7 @@ async function main() {
     objectName: one(flags, "object-name") || one(flags, "asset-name"),
     description: one(flags, "description"),
     regenerate: Boolean(flags.regenerate),
+    regenerateReference: Boolean(flags["regenerate-reference"]),
     referenceOnly: Boolean(flags["reference-only"]),
     imageEditProvider: one(flags, "image-edit-provider"),
     modelProvider: one(flags, "provider") || one(flags, "3d-provider") || one(flags, "model-provider"),
