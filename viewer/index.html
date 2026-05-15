@@ -282,7 +282,8 @@ async function loadModelList() {
       if (!href || href === '../' || href.endsWith('/')) return;
       const filename = href.split('/').pop();
       const ext = filename.split('.').pop().toLowerCase();
-      if (['obj', 'ply', 'glb', 'gltf'].includes(ext)) {
+      // Only show mesh formats (OBJ/GLB/GLTF) — PLY is gaussian splat, not a mesh
+      if (['obj', 'glb', 'gltf'].includes(ext)) {
         const name = filename.replace(/\.[^.]+$/, '');
         const sizeText = link.parentElement?.textContent?.match(/[\d.]+[KM]/)?.[0] || '';
         if (!models.find(m => m.name === name && m.format === ext)) {
