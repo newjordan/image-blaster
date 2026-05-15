@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "instances": [
+    {
+      "instanceId": "golf-ball-0",
+      "objectId": "golf-ball",
+      "assetId": "golf/golf-ball/0",
+      "physics": "rigidbody",
+      "position": [0, 1.5, -2],
+      "rotation": [0, 0, 0],
+      "scale": [1, 1, 1]
+    }
+  ],
+  "sun": {
+    "intensity": 1.5,
+    "rotation": [0.5, 0.3, 0],
+    "environmentIntensity": 0.5
+  },
+  "groundPlaneColliderEnabled": true,
+  "shadowCatcherOpacity": 0.3
+}
