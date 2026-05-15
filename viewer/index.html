@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🔫 Image Blaster — 3D Viewer</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #1a1a2e; color: #eee; font-family: 'Segoe UI', system-ui, sans-serif; overflow: hidden; }
+  #container { display: flex; height: 100vh; }
+  #sidebar {
+    width: 280px; background: #16213e; padding: 16px; overflow-y: auto;
+    border-right: 2px solid #0f3460; flex-shrink: 0;
+  }
+  #viewer { flex: 1; position: relative; }
+  #canvas-container { width: 100%; height: 100%; }
+  h1 { font-size: 1.4em; margin-bottom: 16px; color: #e94560; }
+  h1 span { font-size: 0.6em; color: #aaa; }
+  .model-card {
+    background: #0f3460; border-radius: 8px; padding: 12px; margin-bottom: 8px;
+    cursor: pointer; transition: all 0.2s; border: 2px solid transparent;
+  }
+  .model-card:hover { border-color: #e94560; transform: translateX(4px); }
+  .model-card.active { border-color: #e94560; background: #1a4a8a; }
+  .model-card .name { font-weight: bold; font-size: 0.95em; }
+  .model-card .meta { font-size: 0.75em; color: #aaa; margin-top: 4px; }
+  .model-card .format { 
+    display: inline-block; background: #e94560; color: #fff; padding: 2px 6px;
+    border-radius: 4px; font-size: 0.7em; margin-right: 4px;
+  }
+  #info {
+    position: absolute; bottom: 16px; left: 16px; background: rgba(0,0,0,0.7);
+    padding: 8px 14px; border-radius: 8px; font-size: 0.8em; color: #aaa;
+  }
+  #loading {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    font-size: 1.2em; color: #e94560; display: none;
+  }
+  .empty-state { text-align: center; padding: 40px 20px; color: #666; }
+  .controls-help {
+    margin-top: 20px; padding: 12px; background: #0a1628; border-radius: 8px;
+    font-size: 0.72em; color: #888; line-height: 1.6;
+  }
+  .controls-help kbd {
+    background: #1a1a2e; padding: 2px 6px; border-radius: 3px; border: 1px solid #333;
+  }
+</style>
+</head>
+<body>
+<div id="container">
+  <div id="sidebar">
+    <h1>🔫 Image Blaster <span>3D Viewer</span></h1>
+    <div id="model-list"><div class="empty-state">No models yet — generate one!</div></div>
+    <div class="controls-help">
+      <strong>Controls:</strong><br>
+      <kbd>🖱 Drag</kbd> Rotate<br>
+      <kbd>🖱 Scroll</kbd> Zoom<br>
+      <kbd>🖱 Right-drag</kbd> Pan<br>
+      <kbd>R</kbd> Reset view
+    </div>
+  </div>
+  <div id="viewer">
+    <div id="canvas-container"></div>
+    <div id="loading">Loading model...</div>
+    <div id="info"></div>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
+
+// --- Scene Setup ---
+const container = document.getElementById('canvas-container');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1a1a2e);
+scene.fog = new THREE.Fog(0x1a1a2e, 5, 30);
+
+const camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 100);
+camera.position.set(3, 2, 4);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(container.clientWidth, container.clientHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.2;
+container.appendChild(renderer.domElement);
+
+// Lighting
+const ambient = new THREE.AmbientLight(0x404060, 1.5);
+scene.add(ambient);
+const key = new THREE.DirectionalLight(0xffffff, 3);
+key.position.set(5, 8, 5);
+key.castShadow = true;
+key.shadow.mapSize.set(1024, 1024);
+scene.add(key);
+const fill = new THREE.DirectionalLight(0x6688cc, 1.5);
+fill.position.set(-3, 2, -2);
+scene.add(fill);
+const rim = new THREE.DirectionalLight(0xff8866, 1);
+rim.position.set(0, -1, 3);
+scene.add(rim);
+
+// Ground grid
+const grid = new THREE.GridHelper(6, 20, 0x333366, 0x222244);
+scene.add(grid);
+
+// Controls
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.target.set(0, 0, 0);
+controls.minDistance = 0.5;
+controls.maxDistance = 10;
+controls.update();
+
+// --- Model Loading ---
+let currentModel = null;
+const loadingEl = document.getElementById('loading');
+const infoEl = document.getElementById('info');
+
+function clearModel() {
+  if (currentModel) {
+    scene.remove(currentModel);
+    disposeMesh(currentModel);
+    currentModel = null;
+  }
+}
+
+function disposeMesh(obj) {
+  obj.traverse(child => {
+    if (child.geometry) child.geometry.dispose();
+    if (child.material) {
+      if (Array.isArray(child.material)) {
+        child.material.forEach(m => m.dispose());
+      } else {
+        child.material.dispose();
+      }
+    }
+  });
+}
+
+function fitCameraToObject(obj) {
+  const box = new THREE.Box3().setFromObject(obj);
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z);
+  const fov = camera.fov * (Math.PI / 180);
+  const dist = maxDim / (2 * Math.tan(fov / 2)) * 1.5;
+  
+  controls.target.copy(center);
+  camera.position.set(center.x + dist * 0.6, center.y + dist * 0.4, center.z + dist * 0.8);
+  controls.update();
+}
+
+async function loadModel(path, format) {
+  loadingEl.style.display = 'block';
+  clearModel();
+
+  try {
+    let obj;
+    if (format === 'obj') {
+      const loader = new OBJLoader();
+      obj = await loader.loadAsync(path);
+    } else if (format === 'ply') {
+      // PLY via fetch — convert to geometry
+      const resp = await fetch(path);
+      const text = await resp.text();
+      obj = parsePLY(text);
+    } else {
+      throw new Error('Unsupported format: ' + format);
+    }
+
+    // Set material
+    obj.traverse(child => {
+      if (child.isMesh) {
+        child.material = new THREE.MeshStandardMaterial({
+          color: child.material?.color || 0x44aacc,
+          roughness: 0.4,
+          metalness: 0.1,
+          flatShading: false,
+        });
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
+    });
+
+    scene.add(obj);
+    currentModel = obj;
+    fitCameraToObject(obj);
+    
+    const fileName = path.split('/').pop();
+    const stats = getStats(obj);
+    infoEl.textContent = `${fileName} — ${stats.vertices.toLocaleString()} vertices, ${stats.faces.toLocaleString()} faces`;
+  } catch (e) {
+    console.error('Load error:', e);
+    infoEl.textContent = 'Error loading model: ' + e.message;
+  } finally {
+    loadingEl.style.display = 'none';
+  }
+}
+
+function getStats(obj) {
+  let vertices = 0, faces = 0;
+  obj.traverse(child => {
+    if (child.isMesh && child.geometry) {
+      const geo = child.geometry;
+      vertices += geo.attributes.position?.count || 0;
+      faces += geo.index ? geo.index.count / 3 : (geo.attributes.position?.count || 0) / 3;
+    }
+  });
+  return { vertices, faces };
+}
+
+// Simple PLY parser (ASCII only)
+function parsePLY(text) {
+  const lines = text.split('\n');
+  let vertexCount = 0, faceCount = 0;
+  let headerDone = false;
+  const vertices = [];
+  const colors = [];
+  let vIdx = 0;
+
+  for (const line of lines) {
+    const parts = line.trim().split(/\s+/);
+    if (!headerDone) {
+      if (parts[0] === 'element' && parts[1] === 'vertex') vertexCount = parseInt(parts[2]);
+      if (parts[0] === 'element' && parts[1] === 'face') faceCount = parseInt(parts[2]);
+      if (parts[0] === 'end_header') headerDone = true;
+      continue;
+    }
+    if (vIdx < vertexCount) {
+      vertices.push(parseFloat(parts[0]), parseFloat(parts[1]), parseFloat(parts[2]));
+      if (parts.length >= 6) {
+        colors.push(parseFloat(parts[3])/255, parseFloat(parts[4])/255, parseFloat(parts[5])/255);
+      }
+      vIdx++;
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  if (colors.length === vertices.length) {
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  }
+  geo.computeVertexNormals();
+
+  return new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ 
+    roughness: 0.4, metalness: 0.1,
+    vertexColors: colors.length > 0
+  }));
+}
+
+// --- Model List ---
+async function loadModelList() {
+  const listEl = document.getElementById('model-list');
+  
+  try {
+    const resp = await fetch('/models/');
+    const text = await resp.text();
+    
+    // Parse server's simple directory listing
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(text, 'text/html');
+    const links = doc.querySelectorAll('a');
+    const models = [];
+    
+    links.forEach(link => {
+      const href = link.getAttribute('href');
+      if (!href || href === '../' || href.endsWith('/')) return;
+      const filename = href.split('/').pop();
+      const ext = filename.split('.').pop().toLowerCase();
+      if (['obj', 'ply', 'glb', 'gltf'].includes(ext)) {
+        const name = filename.replace(/\.[^.]+$/, '');
+        const sizeText = link.parentElement?.textContent?.match(/[\d.]+[KM]/)?.[0] || '';
+        if (!models.find(m => m.name === name && m.format === ext)) {
+          models.push({ name, format: ext, path: href, size: sizeText });
+        }
+      }
+    });
+
+    if (models.length === 0) {
+      listEl.innerHTML = '<div class="empty-state">No models found.<br>Run image-blaster to generate!</div>';
+      return;
+    }
+
+    listEl.innerHTML = models.map((m, i) => `
+      <div class="model-card" data-path="${m.path}" data-format="${m.format}" data-index="${i}">
+        <span class="format">${m.format.toUpperCase()}</span>
+        <span class="name">${m.name}</span>
+        <div class="meta">${m.size || '—'}</div>
+      </div>
+    `).join('');
+
+    // Click handlers
+    listEl.querySelectorAll('.model-card').forEach(card => {
+      card.addEventListener('click', () => {
+        listEl.querySelectorAll('.model-card').forEach(c => c.classList.remove('active'));
+        card.classList.add('active');
+        loadModel(card.dataset.path, card.dataset.format);
+      });
+    });
+
+    // Auto-load first model
+    if (models.length > 0) {
+      const first = listEl.querySelector('.model-card');
+      first.classList.add('active');
+      loadModel(first.dataset.path, first.dataset.format);
+    }
+  } catch (e) {
+    listEl.innerHTML = `<div class="empty-state">Error loading models:<br>${e.message}</div>`;
+  }
+}
+
+// --- Keyboard ---
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'r' || e.key === 'R') {
+    if (currentModel) fitCameraToObject(currentModel);
+  }
+});
+
+// --- Resize ---
+window.addEventListener('resize', () => {
+  camera.aspect = container.clientWidth / container.clientHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(container.clientWidth, container.clientHeight);
+});
+
+// --- Render Loop ---
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate();
+
+// --- Init ---
+loadModelList();
+</script>
+</body>
+</html>
