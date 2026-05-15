@@ -1,0 +1,15 @@
+{
+  "name": "blast",
+  "version": "1.0.0",
+  "description": "Agnostic CLI for image-blaster — image to 3D environments powered by World Labs + FAL",
+  "type": "module",
+  "bin": {
+    "blast": "./blast.mjs"
+  },
+  "scripts": {
+    "blast": "node ./blast.mjs"
+  },
+  "dependencies": {
+    "commander": "^13.0.0"
+  }
+}
