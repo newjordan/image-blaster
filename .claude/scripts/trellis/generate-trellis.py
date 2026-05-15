@@ -39,17 +39,26 @@ def gen(args):
     os.makedirs(args.output_dir, exist_ok=True)
     base = os.path.splitext(os.path.basename(args.image))[0]
     
-    # PLY (Gaussian splat — works without CUDA extensions)
+    # PLY (Gaussian splat — may fail on numpy version mismatch)
     ply_path = os.path.join(args.output_dir, f"{base}.ply")
-    outputs['gaussian'][0].save_ply(ply_path)
+    try:
+        outputs['gaussian'][0].save_ply(ply_path)
+        print(f"Gaussian PLY saved: {ply_path}", file=sys.stderr)
+    except Exception as e:
+        print(f"PLY export skipped (numpy compat): {e}", file=sys.stderr)
+        ply_path = None
     
     # Also try mesh export via trimesh
     mesh = outputs.get('mesh', [None])[0]
     obj_path = None
     if mesh is not None:
         try:
+            import trimesh
+            tm = trimesh.Trimesh(vertices=mesh.vertices.cpu().numpy(), faces=mesh.faces.cpu().numpy())
+            if mesh.vertex_attrs is not None:
+                tm.visual.vertex_colors = mesh.vertex_attrs.cpu().numpy()
             obj_path = os.path.join(args.output_dir, f"{base}.obj")
-            mesh.export(obj_path)
+            tm.export(obj_path)
             print(f"Mesh saved: {obj_path}", file=sys.stderr)
         except Exception as e:
             print(f"Mesh export skipped: {e}", file=sys.stderr)
